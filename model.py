@@ -30,17 +30,23 @@ def read_file(**kwargs):
         result = func(csv_reader=csv_reader)
     return result
 
-def labels(**kwargs):
-    team_stats = kwargs['team_stats']
-    
+def game_code_to_winning_team(**kwargs):
+    team_game_stats = kwargs['team_game_stats']
+    result = {}
+
+    for k, v in team_game_stats.iteritems():
+        print("Type of k: " + str(type(k)))
+        print("Type of v: " + str(v))
+        raw_input()
+        
 
 #take this in as an argument
 DATA_PATH = "/home/tanderson/datasets/cfb/cfbstats-com-2005-1-5-0/team-game-statistics.csv"
 
 def main(unused_argv):
-    team_stats = read_file(input_file=DATA_PATH, func=team_game_statistics)
+    team_game_stats = read_file(input_file=DATA_PATH, func=team_game_statistics)
     
-    print(len(team_stats))
+    game_code_to_winning_team(team_game_stats=team_game_stats)
 
 if __name__ == '__main__':
     logging.getLogger("tensorflow").setLevel(logging.INFO)
