@@ -36,3 +36,13 @@ def type_mapper(**kwargs):
         value = util.convert_type(types=(int, float), value=stat_value)
         result[stat_name] = value
     return result
+
+def add_labels(**kwargs):
+    team_game_stats = kwargs['team_game_stats']
+    
+    for game_id, teams in team_game_stats.iteritems():  
+        points = []
+        for team_id, game_stats in teams.iteritems():
+            points.append((game_stats['Points'], team_id))
+        team_game_stats[game_id]['Winner'] = max(points)[1]
+    return team_game_stats
