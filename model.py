@@ -11,17 +11,16 @@ def game_code_to_winning_team(**kwargs):
     for k, v in team_game_stats.iteritems():
         print("Type of k: " + str(type(k)))
         print("Type of v: " + str(v))
-        raw_input()
-        
-#take this in as an argument
-DATA_PATH = "/home/tanderson/datasets/cfb/cfbstats-com-2005-1-5-0/team-game-statistics.csv"
+        raw_input()        
 
-def main(unused_argv):
-    team_game_stats = util.read_file(input_file=DATA_PATH, func=tgs.csv_to_map)
-    converted_tgs = tgs.alter_types(type_mapper=tgs.type_mapper, 
-                                               game_map=team_game_stats)
+def main(args):
+    if len(args) == 2:
+        input_file = args[1]
+        team_game_stats = util.read_file(input_file=input_file, func=tgs.csv_to_map)
+        converted_tgs = tgs.alter_types(type_mapper=tgs.type_mapper, 
+                                        game_map=team_game_stats)
 
-    game_code_to_winning_team(team_game_stats=converted_tgs)
+        game_code_to_winning_team(team_game_stats=converted_tgs)
 
 if __name__ == '__main__':
     logging.getLogger("tensorflow").setLevel(logging.INFO)
