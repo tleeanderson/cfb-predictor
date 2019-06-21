@@ -14,14 +14,14 @@ def loop_through(**kwargs):
         print("k " + str(k))
 #        print("v " + str(v))
 #        print("len(v) " + str(len(v)))
-        raw_input()
+        raw_input() 
 
 def team_game_stats(**kwargs):
     input_directory = kwargs['directory']
 
     tgs_file = path.join(input_directory, tgs.FILE_NAME)
     team_game_stats = util.read_file(input_file=tgs_file, func=tgs.csv_to_map)
-    converted_tgs = tgs.alter_types(type_mapper=tgs.type_mapper,
+    converted_tgs = tgs.alter_types(type_mapper=tgs.type_mapper, 
                                     game_map=team_game_stats)
     labels = tgs.add_labels(team_game_stats=converted_tgs)
     
@@ -46,7 +46,7 @@ def main(args):
         gb = game.subseason(team_games=games_by_team['365'], game_code_id='0031036520051125', 
                                compare=op.le)
 
-        loop_through(data=games_by_team)
+        loop_through(data=gb)
 
 if __name__ == '__main__':
     logging.getLogger("tensorflow").setLevel(logging.INFO)

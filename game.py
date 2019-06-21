@@ -43,4 +43,10 @@ def subseason(**kwargs):
         return filter(lambda x: compare(x[-1], du.parse(team_games[game_code_id][date])), lis)
     else:
         raise ValueError("%s id was not in %s" % (str(game_code_id), str(team_games)))
+        
+            
+        
+            
+        
+
     
