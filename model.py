@@ -5,14 +5,15 @@ import utilities as util
 import team_game_statistics as tgs
 import os.path as path
 import game as game
+import operator as op
 
 def loop_through(**kwargs):
     data = kwargs['data']
 
-    for k, v in data.iteritems():
+    for k in data:
         print("k " + str(k))
-        print("v " + str(v))
-        print("len(v) " + str(len(v)))
+#        print("v " + str(v))
+#        print("len(v) " + str(len(v)))
         raw_input() 
 
 def team_game_stats(**kwargs):
@@ -39,10 +40,13 @@ def main(args):
         input_directory = args[1]
         stats = team_game_stats(directory=input_directory)
         game_data = game_stats(directory=input_directory)
-        games_by_team = game.team_games_by_game_code(games=game_data, 
+        games_by_team = game.seasons_by_game_code(games=game_data, 
                                                      game_code_id='0365002820050910')
 
-        loop_through(data=games_by_team)
+        gb = game.subseason(team_games=games_by_team['365'], game_code_id='0031036520051125', 
+                               compare=op.le)
+
+        loop_through(data=gb)
 
 if __name__ == '__main__':
     logging.getLogger("tensorflow").setLevel(logging.INFO)
