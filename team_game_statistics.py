@@ -1,6 +1,8 @@
 import utilities as util
 
-#functions for reading in data form team_game_statistics.csv
+#functions for reading in data from team_game_statistics.csv
+
+FILE_NAME = 'team-game-statistics.csv'
 
 def csv_to_map(**kwargs):
     csv_reader = kwargs['csv_reader']
