@@ -20,3 +20,8 @@ def convert_type(**kwargs):
         except ValueError:
             pass
     raise ValueError("Could not convert %s" % (value))
+
+def subset_of_map(**kwargs):
+    full_map, take_out_keys = kwargs['full_map'], kwargs['take_out_keys']
+
+    return {k: full_map[k] for k in set(full_map.keys()).difference(take_out_keys)}

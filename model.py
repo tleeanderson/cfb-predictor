@@ -39,7 +39,8 @@ def main(args):
         input_directory = args[1]
         stats = team_game_stats(directory=input_directory)
         game_data = game_stats(directory=input_directory)
-        games_by_team = game.team_games_by_game_code(games=game_data, game_code_id='0365002820050910')
+        games_by_team = game.team_games_by_game_code(games=game_data, 
+                                                     game_code_id='0365002820050910')
 
         loop_through(data=games_by_team)
 

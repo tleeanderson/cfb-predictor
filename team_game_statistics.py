@@ -11,8 +11,8 @@ def csv_to_map(**kwargs):
     for row in csv_reader:
         game_code_key, team_code_key = 'Game Code', 'Team Code'
         game_code_id, team_code_id = row[game_code_key], row[team_code_key]
-        team_game_stats = {k: row[k] for k in set(row.keys())
-                           .difference({game_code_key, team_code_key})}
+        team_game_stats = util.subset_of_map(full_map=row, 
+                                             take_out_keys={game_code_key, team_code_key})
         if game_code_id in result:
             result[game_code_id][team_code_id] = team_game_stats
         else:

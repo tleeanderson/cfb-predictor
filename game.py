@@ -1,4 +1,5 @@
 import utilities as util
+from dateutil import parser as du
 
 #functions for reading in data from game.csv
 
@@ -19,19 +20,17 @@ def team_games_by_game_code(**kwargs):
     visit_team, home_team = 'Visit Team Code', 'Home Team Code'
 
     games_by_team = {}
-    games_by_team[games[game_code_id][visit_team]] = []
-    games_by_team[games[game_code_id][home_team]] = []
+    games_by_team[games[game_code_id][visit_team]] = {}
+    games_by_team[games[game_code_id][home_team]] = {}
 
     for gid, game_info in games.iteritems():
         if game_info[visit_team] in games_by_team:
-            games_by_team[game_info[visit_team]].append({gid: game_info})
+            games_by_team[game_info[visit_team]][gid] = util.subset_of_map(full_map=game_info, 
+                                                                           take_out_keys={'Game Code'})
         if game_info[home_team] in games_by_team:
-            games_by_team[game_info[home_team]].append({gid: game_info})
-
+            games_by_team[game_info[home_team]][gid] = util.subset_of_map(full_map=game_info, 
+                                                                           take_out_keys={'Game Code'})
     return games_by_team
-        
-        
-            
         
 
     
