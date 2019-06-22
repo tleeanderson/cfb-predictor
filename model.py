@@ -21,8 +21,28 @@ def attr_compare(**kwargs):
     else:
         return [v1 + v2].index(compare(v1, v2))
 
-# def eval_func(**kwargs):
-#     stat_map1, stat_map2 = kwargs['stat_map1'], kwargs['stat_map2']
-
-#     for sm1_key in stat_map1.keys():
-        
+def eval_func(**kwargs):
+    stat_map1, st1_key, stat_map2, st2_key, field_win, undec_fields, c1, c2 = kwargs['stat_map1'],\
+                                                                             kwargs['st1_key'],\
+                                                                             kwargs['stat_map2'],\
+                                                                             kwargs['st2_key'],\
+                                                                             kwargs['field_win'],\
+                                                                             kwargs['undec_fields'], 0, 0
+    
+    for sm1_key in stat_map1.keys():
+        if sm1_key in undec_fields:
+            continue
+        else:
+            lis = filter(lambda t: t[0], map(lambda k: (sm1_key in k, k), field_win))
+            if not lis:
+                raise ValueError("key %s is not in %s" % (str(sm1_key), str(field_win)))
+            func_key = lis[0][1]                                   
+            ind = field_win[func_key](stat_map1[sm1_key], stat_map2[sm1_key])
+            if ind == 'tie':
+                #tie does not affect scores for either team
+                pass
+            elif ind == 0:
+                c1 += 1
+            else:
+                c2 += 1
+    return {st1_key: c1, st2_key: c2}

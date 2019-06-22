@@ -6,6 +6,7 @@ import team_game_statistics as tgs
 import os.path as path
 import game as game
 import operator as op
+import model
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -51,7 +52,11 @@ def main(args):
         games_to_avg = {gid: stats[gid] for gid in map(lambda g: g[0], gb)}
         avgs = tgs.averages(game_stats=games_to_avg, team_ids={'365'})
 
-        loop_through(data=avgs)
+        print(model.eval_func(stat_map1=avgs['365'], 
+                              stat_map2=avgs['365'], st1_key='365_1', st2_key='365_2', 
+                              field_win=model.FIELD_WIN_SEMANTICS, 
+                              undec_fields=model.UNDECIDED_FIELDS))
+        #loop_through(data=avgs)
 
 if __name__ == '__main__':
     logging.getLogger("tensorflow").setLevel(logging.INFO)
