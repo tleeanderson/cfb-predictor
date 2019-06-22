@@ -12,7 +12,9 @@ def loop_through(**kwargs):
 
     for k, v in data.iteritems():
         print("k " + str(k))
-        print("v " + str(v))
+        #print("v " + str(v))
+        for attr, av in v.iteritems():
+            print("attr: %s av: %s", str(attr), str(av))
         print("len(v) " + str(len(v)))
         raw_input() 
 
@@ -23,6 +25,8 @@ def team_game_stats(**kwargs):
     team_game_stats = util.read_file(input_file=tgs_file, func=tgs.csv_to_map)
     converted_tgs = tgs.alter_types(type_mapper=tgs.type_mapper, 
                                     game_map=team_game_stats)
+
+    #this breaks statistics
     #labels = tgs.add_labels(team_game_stats=converted_tgs)
     
     return converted_tgs
