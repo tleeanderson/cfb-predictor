@@ -25,3 +25,17 @@ def subset_of_map(**kwargs):
     full_map, take_out_keys = kwargs['full_map'], kwargs['take_out_keys']
 
     return {k: full_map[k] for k in set(full_map.keys()).difference(take_out_keys)}
+
+def merge_maps(**kwargs):
+    map1, map2, merge_op = kwargs['map1'], kwargs['map2'], kwargs['merge_op']
+    
+    if set(map1.keys()) == set(map2.keys()):
+        return {k: merge_op(map1[k], map2[k]) for k in map1.keys()}
+    else:
+        raise ValueError("set(map1.keys()) == set(map2.keys()) must be true, diff: (%s)" % 
+                         (str(set(map1.keys()).difference(map2.keys()))))
+
+def create_map(**kwargs):
+    keys, default = kwargs['keys'], kwargs['default']
+
+    return {k: default for k in keys}

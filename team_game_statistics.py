@@ -1,4 +1,5 @@
 import utilities as util
+import operator as op
 
 #functions for reading in data from team_game_statistics.csv
 
@@ -49,3 +50,20 @@ def add_labels(**kwargs):
         team_game_stats[game_id]['Winner'] = {'Team Code': max(points)[1], 
                                               'Total Points': sum(map(lambda t: t[0], points))}
     return team_game_stats
+
+def averages(**kwargs):
+    game_stats, team_ids = kwargs['game_stats'], kwargs['team_ids']
+
+    avgs = {}
+    for gid, team_stats in game_stats.iteritems():
+        for tid, stats in team_stats.iteritems():
+            if tid in team_ids:
+                if tid in avgs:
+                    avgs[tid] = util.merge_maps(map1=avgs[tid], map2=stats, merge_op=op.add)
+                else:
+                    avgs[tid] = stats
+    for tid, stats in avgs.iteritems():
+        avgs[tid] = util.merge_maps(map1=stats, 
+                                    map2=util.create_map(keys=avgs[tid].keys(), default=float(len(game_stats.keys()))), 
+                                    merge_op=op.div)
+    return avgs
