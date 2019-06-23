@@ -50,7 +50,8 @@ def evaluation(**kwargs):
             else:
                 c2 += 1
     if c1 == c2:
-        print("comparison resulted in tie")
+        pass
+        #print("comparison resulted in tie")
     return {st1_key: c1, st2_key: c2}
 
 def predict(**kwargs):
@@ -101,9 +102,9 @@ def predict_all(**kwargs):
     return preds
 
 def accuracy(**kwargs):
-    tg_stats, predictions, winner, team_code, corr_key, incorr_key, total_key, sk = kwargs['tg_stats'],\
-    kwargs['predictions'], 'Winner', 'Team Code', kwargs['corr_key'], kwargs['incorr_key'],\
-    kwargs['total_key'], kwargs['skip_keys']
+    tg_stats, predictions, winner, team_code, corr_key, incorr_key, total_key, sk, ak =\
+    kwargs['tg_stats'], kwargs['predictions'], 'Winner', 'Team Code', kwargs['corr_key'],\
+    kwargs['incorr_key'], kwargs['total_key'], kwargs['skip_keys'], kwargs['acc_key']
 
     result = {}
     for gid, pred in predictions.iteritems():
@@ -123,4 +124,5 @@ def accuracy(**kwargs):
                 result[incorr_key] = 1
 
     result[total_key] = result[corr_key] + result[incorr_key]
+    result[ak] = float(result[corr_key]) / result[total_key]
     return result
