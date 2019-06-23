@@ -21,7 +21,7 @@ def attr_compare(**kwargs):
     else:
         return ([v1] + [v2]).index(compare(v1, v2))
 
-def eval_func(**kwargs):
+def evaluation(**kwargs):
     stat_map1, st1_key, stat_map2, st2_key, field_win, undec_fields, c1, c2 = kwargs['stat_map1'],\
                                                                              kwargs['st1_key'],\
                                                                              kwargs['stat_map2'],\
@@ -46,3 +46,23 @@ def eval_func(**kwargs):
             else:
                 c2 += 1
     return {st1_key: c1, st2_key: c2}
+
+def predict(**kwargs):
+    team_avgs, game_code_id = kwargs['team_avgs'], kwargs['game_code_id']
+
+    
+    
+
+def team_avgs(**kwargs):
+    game_code_id, game_data, tg_stats = kwargs['game_code_id'], kwargs['game_data'], kwargs['tg_stats']
+
+    games_by_team = game.seasons_by_game_code(games=game_data, 
+                                              game_code_id=game_code_id)
+    avgs = []
+    for tid, games in games_by_team.iteritems():
+        gb = game.subseason(team_games=games, game_code_id=game_code_id, 
+                           compare=op.le)  
+        games_to_avg = {gid: tg_stats[gid] for gid in map(lambda g: g[0], gb)}
+        avgs.append((tid, tgs.averages(game_stats=games_to_avg, team_ids={tid})))
+    
+    return avgs

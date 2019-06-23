@@ -39,22 +39,7 @@ def game_stats(**kwargs):
     game_data = util.read_file(input_file=game_file, func=game.csv_to_map)
     
     return game_data
-
-def team_avgs_by_gid(**kwargs):
-    game_code_id, game_data, tg_stats = kwargs['game_code_id'], kwargs['game_data'], kwargs['tg_stats']
-
-    games_by_team = game.seasons_by_game_code(games=game_data, 
-                                              game_code_id=game_code_id)
-    avgs = []
-    for tid, games in games_by_team.iteritems():
-        gb = game.subseason(team_games=games, game_code_id=game_code_id, 
-                           compare=op.le)  
-        games_to_avg = {gid: tg_stats[gid] for gid in map(lambda g: g[0], gb)}
-        avgs.append((tid, tgs.averages(game_stats=games_to_avg, team_ids={tid})))
     
-    return avgs
-    
-
 def main(args):
     if len(args) == 2:
         input_directory = args[1]
@@ -63,10 +48,10 @@ def main(args):
 
         avgs = team_avgs_by_gid(game_code_id='0365002820050910', game_data=game_data, tg_stats=stats)
 
-        print(model.eval_func(stat_map1=avgs[0][1][avgs[0][0]], 
-                              stat_map2=avgs[1][1][avgs[1][0]], st1_key=avgs[0][0], st2_key=avgs[1][0], 
-                              field_win=model.FIELD_WIN_SEMANTICS, 
-                              undec_fields=model.UNDECIDED_FIELDS))
+        # print(model.evaluation(stat_map1=avgs[0][1][avgs[0][0]], 
+        #                       stat_map2=avgs[1][1][avgs[1][0]], st1_key=avgs[0][0], st2_key=avgs[1][0], 
+        #                       field_win=model.FIELD_WIN_SEMANTICS, 
+        #                       undec_fields=model.UNDECIDED_FIELDS))
         
         #loop_through(data=avgs[0][1])
 
