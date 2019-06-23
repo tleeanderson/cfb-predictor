@@ -61,7 +61,7 @@ def main(args):
         stats = team_game_stats(directory=input_directory)
         game_data = game_stats(directory=input_directory)
 
-        avgs = team_avgs_by_gid(game_code_id=)
+        avgs = team_avgs_by_gid(game_code_id='0365002820050910')
 
         print(model.eval_func(stat_map1=avgs['365'], 
                               stat_map2=avgs['365'], st1_key='365_1', st2_key='365_2', 
