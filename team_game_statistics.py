@@ -64,6 +64,7 @@ def averages(**kwargs):
                     avgs[tid] = stats
     for tid, stats in avgs.iteritems():
         avgs[tid] = util.merge_maps(map1=stats, 
-                                    map2=util.create_map(keys=avgs[tid].keys(), default=float(len(game_stats.keys()))), 
+                                    map2=util.create_map(keys=avgs[tid].keys(), 
+                                                         default=float(len(game_stats.keys()))), 
                                     merge_op=op.div)
     return avgs

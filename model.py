@@ -1,3 +1,7 @@
+import operator as op
+import game
+import team_game_statistics as tgs
+
 MAX_COMPARE = lambda v1, v2: attr_compare(v1=v1, v2=v2, compare=max)
 MIN_COMPARE = lambda v1, v2: attr_compare(v1=v1, v2=v2, compare=min)
 UNDECIDED_FIELDS = {'Field Goal Att', 'Rush Att', 'Time Of Possession', 'Kickoff', '1st Down Pass', 
@@ -45,12 +49,24 @@ def evaluation(**kwargs):
                 c1 += 1
             else:
                 c2 += 1
+    if c1 == c2:
+        print("comparison resulted in tie")
     return {st1_key: c1, st2_key: c2}
 
 def predict(**kwargs):
-    team_avgs, game_code_id = kwargs['team_avgs'], kwargs['game_code_id']
+    team_avgs, game_code_id, tg_stats, eval_func = kwargs['team_avgs'], kwargs['game_code_id'],\
+                                                   kwargs['tg_stats'], kwargs['eval_func']
 
-    
+    keys = team_avgs.keys()
+    if len(keys) == 2:
+        prediction = eval_func(stat_map1=team_avgs[keys[0]], stat_map2=team_avgs[keys[1]], 
+                               st1_key=keys[0], st2_key=keys[1], field_win=FIELD_WIN_SEMANTICS, 
+                               undec_fields=UNDECIDED_FIELDS)        
+        prediction.update({'Winner': max(prediction.iteritems(), key=op.itemgetter(1))[0]})
+        
+        return prediction
+    else:
+        raise ValueError("len(team_avgs.keys()) == 2 must be true, team_avgs: %s" % (str(team_avgs)))
     
 
 def team_avgs(**kwargs):
@@ -58,11 +74,53 @@ def team_avgs(**kwargs):
 
     games_by_team = game.seasons_by_game_code(games=game_data, 
                                               game_code_id=game_code_id)
-    avgs = []
-    for tid, games in games_by_team.iteritems():
+    avgs = {}
+    for tid, games in games_by_team.iteritems():        
         gb = game.subseason(team_games=games, game_code_id=game_code_id, 
-                           compare=op.le)  
+                           compare=op.lt)
         games_to_avg = {gid: tg_stats[gid] for gid in map(lambda g: g[0], gb)}
-        avgs.append((tid, tgs.averages(game_stats=games_to_avg, team_ids={tid})))
-    
+        avgs.update(tgs.averages(game_stats=games_to_avg, team_ids={tid}))
     return avgs
+
+def predict_all(**kwargs):
+    team_game_stats, game_infos, no_pred, no_pred_key = kwargs['team_game_stats'], kwargs['game_infos'],\
+                                                        set(), kwargs['no_pred_key']
+
+    preds = {}
+    for gid, game_stats in team_game_stats.iteritems():
+        ta = team_avgs(game_code_id=gid, game_data=game_infos, tg_stats=team_game_stats)
+        if len(ta) == 2:
+            preds[gid] = predict(team_avgs=ta, game_code_id=gid, tg_stats=team_game_stats, 
+                                 eval_func=evaluation)
+        else:            
+            if no_pred_key in preds:
+                preds[no_pred_key].append(gid)
+            else:
+                preds[no_pred_key] = []
+
+    return preds
+
+def accuracy(**kwargs):
+    tg_stats, predictions, winner, team_code, corr_key, incorr_key, total_key, sk = kwargs['tg_stats'],\
+    kwargs['predictions'], 'Winner', 'Team Code', kwargs['corr_key'], kwargs['incorr_key'],\
+    kwargs['total_key'], kwargs['skip_keys']
+
+    result = {}
+    for gid, pred in predictions.iteritems():
+        if gid in sk:
+            continue
+        actual = tg_stats[gid][winner][team_code]
+        p = pred[winner]
+        if actual == p:
+            if corr_key in result:
+                result[corr_key] += 1
+            else:
+                result[corr_key] = 1
+        else:
+            if incorr_key in result:
+                result[incorr_key] += 1
+            else:
+                result[incorr_key] = 1
+
+    result[total_key] = result[corr_key] + result[incorr_key]
+    return result
