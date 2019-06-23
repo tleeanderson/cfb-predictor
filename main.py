@@ -13,9 +13,9 @@ def loop_through(**kwargs):
 
     for k, v in data.iteritems():
         print("k " + str(k))
-        #print("v " + str(v))
-        for attr, av in v.iteritems():
-            print("attr: %s av: %s" % (str(attr), str(av)))
+        print("v " + str(v))
+        # for attr, av in v.iteritems():
+        #     print("attr: %s av: %s" % (str(attr), str(av)))
         print("len(v) " + str(len(v)))
         raw_input() 
 
@@ -41,15 +41,15 @@ def game_stats(**kwargs):
     return game_data
 
 def team_avgs_by_gid(**kwargs):
-    game_code_id = kwargs['game_code_id']
+    game_code_id, game_data, tg_stats = kwargs['game_code_id'], kwargs['game_data'], kwargs['tg_stats']
 
     games_by_team = game.seasons_by_game_code(games=game_data, 
                                               game_code_id=game_code_id)
     avgs = []
     for tid, games in games_by_team.iteritems():
-        gb = game.subseason(team_games=games_by_team[tid], game_code_id=game_code_id, 
+        gb = game.subseason(team_games=games, game_code_id=game_code_id, 
                            compare=op.le)  
-        games_to_avg = {gid: stats[gid] for gid in map(lambda g: g[0], gb)}
+        games_to_avg = {gid: tg_stats[gid] for gid in map(lambda g: g[0], gb)}
         avgs.append((tid, tgs.averages(game_stats=games_to_avg, team_ids={tid})))
     
     return avgs
@@ -61,13 +61,14 @@ def main(args):
         stats = team_game_stats(directory=input_directory)
         game_data = game_stats(directory=input_directory)
 
-        avgs = team_avgs_by_gid(game_code_id='0365002820050910')
+        avgs = team_avgs_by_gid(game_code_id='0365002820050910', game_data=game_data, tg_stats=stats)
 
-        print(model.eval_func(stat_map1=avgs['365'], 
-                              stat_map2=avgs['365'], st1_key='365_1', st2_key='365_2', 
+        print(model.eval_func(stat_map1=avgs[0][1][avgs[0][0]], 
+                              stat_map2=avgs[1][1][avgs[1][0]], st1_key=avgs[0][0], st2_key=avgs[1][0], 
                               field_win=model.FIELD_WIN_SEMANTICS, 
                               undec_fields=model.UNDECIDED_FIELDS))
-        #loop_through(data=avgs)
+        
+        #loop_through(data=avgs[0][1])
 
 if __name__ == '__main__':
     logging.getLogger("tensorflow").setLevel(logging.INFO)
