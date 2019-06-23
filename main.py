@@ -15,7 +15,7 @@ def loop_through(**kwargs):
         print("k " + str(k))
         #print("v " + str(v))
         for attr, av in v.iteritems():
-            print("attr: %s av: %s", str(attr), str(av))
+            print("attr: %s av: %s" % (str(attr), str(av)))
         print("len(v) " + str(len(v)))
         raw_input() 
 
@@ -40,17 +40,28 @@ def game_stats(**kwargs):
     
     return game_data
 
+def team_avgs_by_gid(**kwargs):
+    game_code_id = kwargs['game_code_id']
+
+    games_by_team = game.seasons_by_game_code(games=game_data, 
+                                              game_code_id=game_code_id)
+    avgs = []
+    for tid, games in games_by_team.iteritems():
+        gb = game.subseason(team_games=games_by_team[tid], game_code_id=game_code_id, 
+                           compare=op.le)  
+        games_to_avg = {gid: stats[gid] for gid in map(lambda g: g[0], gb)}
+        avgs.append((tid, tgs.averages(game_stats=games_to_avg, team_ids={tid})))
+    
+    return avgs
+    
+
 def main(args):
     if len(args) == 2:
         input_directory = args[1]
         stats = team_game_stats(directory=input_directory)
         game_data = game_stats(directory=input_directory)
-        games_by_team = game.seasons_by_game_code(games=game_data, 
-                                                     game_code_id='0365002820050910')
-        gb = game.subseason(team_games=games_by_team['365'], game_code_id='0031036520051125', 
-                               compare=op.le)
-        games_to_avg = {gid: stats[gid] for gid in map(lambda g: g[0], gb)}
-        avgs = tgs.averages(game_stats=games_to_avg, team_ids={'365'})
+
+        avgs = team_avgs_by_gid(game_code_id=)
 
         print(model.eval_func(stat_map1=avgs['365'], 
                               stat_map2=avgs['365'], st1_key='365_1', st2_key='365_2', 
