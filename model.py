@@ -88,7 +88,7 @@ def predict_all(**kwargs):
                                                         set(), kwargs['no_pred_key']
 
     preds = {}
-    for gid, game_stats in team_game_stats.iteritems():
+    for gid in team_game_stats.keys():
         ta = team_avgs(game_code_id=gid, game_data=game_infos, tg_stats=team_game_stats)
         if len(ta) == 2:
             preds[gid] = predict(team_avgs=ta, game_code_id=gid, tg_stats=team_game_stats, 
