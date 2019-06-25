@@ -1,5 +1,3 @@
-import tensorflow as tf
-import logging
 import numpy as np
 import utilities as util
 import team_game_statistics as tgs
@@ -8,6 +6,7 @@ import game
 import operator as op
 import model
 import glob
+import sys
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -83,7 +82,8 @@ def main(args):
         model_acc = evaluate_model(directory=input_directory, prefix=args[2])
         print_summary(model_acc=model_acc)
         #loop_through(data=tgs.add_labels(team_game_stats=stats))
+    else:
+        print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
 
 if __name__ == '__main__':
-    logging.getLogger("tensorflow").setLevel(logging.INFO)
-    tf.app.run()
+    main(sys.argv)
