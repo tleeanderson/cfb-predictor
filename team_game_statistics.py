@@ -1,5 +1,6 @@
 import utilities as util
 import operator as op
+import copy
 
 #functions for reading in data from team_game_statistics.csv
 
@@ -41,7 +42,7 @@ def type_mapper(**kwargs):
     return result
 
 def add_labels(**kwargs):
-    team_game_stats = kwargs['team_game_stats']
+    team_game_stats = copy.deepcopy(kwargs['team_game_stats'])
     
     for game_id, teams in team_game_stats.iteritems():  
         points = []
