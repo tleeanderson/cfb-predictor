@@ -33,16 +33,17 @@ def loop_through(**kwargs):
 
     for k, v in data.iteritems():
         print("k " + str(k))
-        #print("v " + str(v))
+        print("v " + str(v))
         # for tid, stat in v.iteritems():
         #     print("tid " + str(tid))
         #     print("stat len " + str(len(stat)))
-        print("len(v) " + str(len(v)))
+        #print("len(v) " + str(len(v)))
         #print("keys of v " + str(v.keys()))
         #raw_input()
 
 def averages(**kwargs):
-    team_game_stats, game_infos = kwargs['team_game_stats'], kwargs['game_infos']
+    team_game_stats, game_infos, skip_fields = kwargs['team_game_stats'], kwargs['game_infos'],\
+                                               kwargs['skip_fields']
 
     game_avgs = {}
     for gid in team_game_stats.keys():
@@ -50,7 +51,7 @@ def averages(**kwargs):
         if len(avgs) == 2:
             game_avgs[gid] = {}
             for tid, stats in avgs.iteritems():
-                game_avgs[gid][tid] = stats
+                game_avgs[gid][tid] = {k: stats[k] for k in set(stats.keys()).difference(skip_fields)}
         else:
             pass
         
@@ -82,11 +83,14 @@ def main(args):
         gs = temp_lib.game_stats(directory=args[1])
         team_stats = temp_lib.team_game_stats(directory=args[1])
 
-        avgs = averages(team_game_stats=team_stats, game_infos=gs)
+        avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}
         
         labels = tgs.add_labels(team_game_stats=team_stats)
-        data = input_data(game_averages=team_stats, labels=labels)
+        data = input_data(game_averages=avgs, labels=labels)
+
+        #loop_through(data=data[0])
+        #print("len features: %d, len labels: %d" % (len(data[0]), len(data[1])))
     else:
         print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
 
