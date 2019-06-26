@@ -4,6 +4,10 @@ import model
 import team_game_statistics as tgs
 import numpy as np
 import copy
+from dateutil import parser as du
+import math
+import random
+from random import randint
 
 def check(**kwargs):
     tga = kwargs['tga']
@@ -33,11 +37,11 @@ def loop_through(**kwargs):
 
     for k, v in data.iteritems():
         print("k " + str(k))
-        print("v " + str(v))
+        #print("v " + str(v))
         # for tid, stat in v.iteritems():
         #     print("tid " + str(tid))
         #     print("stat len " + str(len(stat)))
-        #print("len(v) " + str(len(v)))
+        print("len(v) " + str(len(v)))
         #print("keys of v " + str(v.keys()))
         #raw_input()
 
@@ -78,18 +82,75 @@ def input_data(**kwargs):
 
     return features, np.array(labels)
 
+def histogram_games(**kwargs):
+    game_infos, game_stats, histo_key = kwargs['game_infos'], kwargs['game_stats'], kwargs['histo_key']
+
+    histo = {}
+    for gid in game_stats.keys():
+        info = game_infos[gid]
+        if info[histo_key] not in histo:
+            histo[info[histo_key]] = []
+        histo[info[histo_key]].append(gid)
+    
+    return histo
+
+def sort_by(**kwargs):
+    input_map, key_sort = kwargs['input_map'], kwargs['key_sort']
+
+    lis = list(input_map.iteritems())
+    lis.sort(key=key_sort)
+
+    return lis
+
+def split_data(**kwargs):
+    gh, sp, shc = kwargs['game_histo'], float(kwargs['split_percentage']), kwargs['histo_count']
+
+    train = []
+    test = []
+    train_divi = True
+    for k, count in shc.iteritems():
+        if count == 1:
+            if train_divi:
+                train.append(gh[k][0])
+                train_divi = False
+            else:
+                test.append(gh[k][0])
+                train_divi = True
+        elif count == 2:
+            num = randint(0, 1)
+            train.append(gh[k][num])
+            test.append(gh[k][int(not num)])
+        else:
+            train_split = int(round(count * sp))
+            test_split = count - train_split
+            if test_split == 0:
+                train_split = int(math.ceil(float(count) / 2))
+            ind_range = set(range(len(gh[k])))
+            train_ind = set(random.sample(ind_range, train_split))
+            test_ind = ind_range.difference(train_ind)
+            train += [gh[k][e] for e in train_ind]
+            test += [gh[k][e] for e in test_ind]
+
+    return train, test
+            
+
 def main(args):
     if len(args) == 2:
         gs = temp_lib.game_stats(directory=args[1])
         team_stats = temp_lib.team_game_stats(directory=args[1])
 
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
-        team_stats = {k: team_stats[k] for k in avgs.keys()}
-        
-        labels = tgs.add_labels(team_game_stats=team_stats)
-        data = input_data(game_averages=avgs, labels=labels)
+        team_stats = {k: team_stats[k] for k in avgs.keys()}        
+        labels = tgs.add_labels(team_game_stats=team_stats)        
+        histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
+        game_count = {k: len(histo[k]) for k in histo.keys()}
+        split = split_data(game_histo=histo, split_percentage=0.85, histo_count=game_count)
 
-        #loop_through(data=data[0])
+        for e in split:
+            print(len(e))
+
+        #data = input_data(game_averages=avgs, labels=labels)
+        
         #print("len features: %d, len labels: %d" % (len(data[0]), len(data[1])))
     else:
         print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
