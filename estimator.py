@@ -9,29 +9,6 @@ import math
 import random
 from random import randint
 
-def check(**kwargs):
-    tga = kwargs['tga']
-
-    keys = {}
-    for gid, stats in tga.iteritems():
-        for tid, stats in stats.iteritems():
-            keys = stats.keys()
-            break
-
-    for gid, stats in tga.iteritems():
-        for tid, stats in stats.iteritems():
-            if set(keys) != set(stats.keys()):
-                print("mismatch found: gid %s, tids %s len keys: %d, len stats: %d" 
-                      % (gid, tid, len(keys), len(stats.keys())))
-
-        # keys = check(tga=avgs)
-        # more_keys = set(keys)
-        # keys = map(lambda k: k + "_0", keys)
-        # more_keys = map(lambda k: k + "_1", more_keys)
-        # print(set(cols.keys()).difference(set(keys).union(set(more_keys))))
-    
-    return keys
-
 def loop_through(**kwargs):
     data = kwargs['data']
 
@@ -170,8 +147,6 @@ def main(args):
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
         game_count = {k: len(histo[k]) for k in histo.keys()}
         split = split_data(game_histo=histo, split_percentage=0.85, histo_count=game_count)
-
-        visualize_split(split=split, game_info=gs, total_games=len(avgs))
 
         #data = input_data(game_averages=avgs, labels=labels)
         
