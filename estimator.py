@@ -45,7 +45,7 @@ def input_data(**kwargs):
     features = {}
     labels = []
     for gid, team_avgs in game_avgs.iteritems():
-        for ta, feature_team_id, fid in zip(team_avgs.iteritems(), ['_0', '_1'], [0, 1]):
+        for ta, feature_team_id, fid in zip(team_avgs.iteritems(), ['-0', '-1'], [0, 1]):
             tid, stats = ta
             for name, value in stats.iteritems():
                 stat_key = name + feature_team_id
@@ -170,7 +170,7 @@ def model_fn(features, labels, mode, params):
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
 def train_input_fn(features, labels, batch_size):
-    return tf.data.Dataset.from_tensor_slices(dict(features), labels)\
+    return tf.data.Dataset.from_tensor_slices((dict(features), labels))\
                              .shuffle(1000).repeat().batch(batch_size)
     
 def eval_input_fn(features, labels, batch_size):
@@ -181,9 +181,6 @@ def eval_input_fn(features, labels, batch_size):
     dataset = dataset.batch(batch_size)
 
     return dataset
-
-BATCH_SIZE = 20
-TRAIN_STEPS = 100
 
 def run_model(**kwargs):
     avgs, split, labels = kwargs['team_avgs'], kwargs['split'], kwargs['labels']
@@ -206,10 +203,23 @@ def run_model(**kwargs):
 
     print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**eval_result))
 
+BATCH_SIZE = 20
+TRAIN_STEPS = 10000
+
+def rename_keys(**kwargs):
+    team_stats = copy.deepcopy(kwargs['team_stats'])
+
+    for gid, teams in team_stats.iteritems():
+        for tid, stats in teams.iteritems():
+            for name in stats.keys():
+                stats[name.replace(' ', '-')] = stats.pop(name)
+    return team_stats
+
 def main(args):
     if len(args) == 2:
         gs = temp_lib.game_stats(directory=args[1])
         team_stats = temp_lib.team_game_stats(directory=args[1])
+        team_stats = rename_keys(team_stats=team_stats)
 
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
