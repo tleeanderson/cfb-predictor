@@ -194,7 +194,7 @@ def run_model(**kwargs):
         feature_columns.append(tf.feature_column.numeric_column(key=key))
 
     classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_columns, 
-                                                                   'hidden_units': [84, 16], 
+                                                                   'hidden_units': [10, 10], 
                                                                    'num_classes': 2})
     classifier.train(input_fn=lambda: train_input_fn(train_features, train_labels, BATCH_SIZE),
                      steps=TRAIN_STEPS)
@@ -204,7 +204,7 @@ def run_model(**kwargs):
     print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**eval_result))
 
 BATCH_SIZE = 20
-TRAIN_STEPS = 10000
+TRAIN_STEPS = 2000
 
 def rename_keys(**kwargs):
     team_stats = copy.deepcopy(kwargs['team_stats'])
@@ -232,4 +232,6 @@ def main(args):
         print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
 
 if __name__ == '__main__':
-    main(sys.argv)
+    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.app.run(main)
+    
