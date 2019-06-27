@@ -8,6 +8,7 @@ from dateutil import parser as du
 import math
 import random
 from random import randint
+import tensorflow as tf
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -136,6 +137,75 @@ def visualize_split(**kwargs):
     print("Addition of splits should equal total games. Total games: %s Addition: %s" 
           % (str(tg), str(len(split[0]) + len(split[1]))))
 
+def model_fn(features, labels, mode, params):
+    net = tf.feature_column.input_layer(features, params['feature_columns'])
+    for units in params['hidden_units']:
+        net = tf.layers.dense(net, units=units, activation=tf.nn.relu)
+    
+    logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
+    predicted_classes = tf.argmax(logits, 1)
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        predictions = {
+            'class_ids': predicted_classes[:, tf.newaxis],
+            'probabilities': tf.nn.softmax(logits),
+            'logits': logits,
+        }
+        return tf.estimator.EstimatorSpec(mode, predictions=predictions)
+    
+    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+    accuracy = tf.metrics.accuracy(labels=labels,
+                                   predictions=predicted_classes,
+                                   name='acc_op')
+    metrics = {'accuracy': accuracy}
+    tf.summary.scalar('accuracy', accuracy[1])
+
+    if mode == tf.estimator.ModeKeys.EVAL:
+        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics)
+    
+    assert mode == tf.estimator.ModeKeys.TRAIN
+
+    optimizer = tf.train.AdagradOptimizer(learning_rate=0.1)
+    train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
+    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
+
+def train_input_fn(features, labels, batch_size):
+    return tf.data.Dataset.from_tensor_slices(dict(features), labels)\
+                             .shuffle(1000).repeat().batch(batch_size)
+    
+def eval_input_fn(features, labels, batch_size):
+    features=dict(features)
+    inputs = features if labels is None else (features, labels)
+    dataset = tf.data.Dataset.from_tensor_slices(inputs)
+    assert batch_size is not None, "batch_size must not be None"
+    dataset = dataset.batch(batch_size)
+
+    return dataset
+
+BATCH_SIZE = 20
+TRAIN_STEPS = 100
+
+def run_model(**kwargs):
+    avgs, split, labels = kwargs['team_avgs'], kwargs['split'], kwargs['labels']
+
+    train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
+                                              labels=labels)
+    test_features, test_labels = input_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
+                                            labels=labels)
+    feature_columns = []
+    for key in train_features.keys():
+        feature_columns.append(tf.feature_column.numeric_column(key=key))
+
+    classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_columns, 
+                                                                   'hidden_units': [84, 16], 
+                                                                   'num_classes': 2})
+    classifier.train(input_fn=lambda: train_input_fn(train_features, train_labels, BATCH_SIZE),
+                     steps=TRAIN_STEPS)
+    eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(test_features, 
+                                                                     test_labels, BATCH_SIZE))
+
+    print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**eval_result))
+
 def main(args):
     if len(args) == 2:
         gs = temp_lib.game_stats(directory=args[1])
@@ -147,11 +217,7 @@ def main(args):
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
         split = split_data(game_histo=histo, split_percentage=0.85, 
                            histo_count={k: len(histo[k]) for k in histo.keys()})
-
-        visualize_split(split=split, game_info=gs, total_games=len(avgs))
-        #data = input_data(game_averages=avgs, labels=labels)
-        
-        #print("len features: %d, len labels: %d" % (len(data[0]), len(data[1])))
+        run_model(team_avgs=avgs, split=split, labels=labels)
     else:
         print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
 
