@@ -132,7 +132,32 @@ def split_data(**kwargs):
             test += [gh[k][e] for e in test_ind]
 
     return train, test
-            
+
+def split_by_date(**kwargs):
+    split, gs = kwargs['split'], kwargs['game_info']
+
+    tdh = {}
+    for gid in split:
+        if gs[gid]['Date'] not in tdh:
+            tdh[gs[gid]['Date']] = []
+        tdh[gs[gid]['Date']].append(gid)
+
+    tdh = {k: len(tdh[k]) for k in tdh.keys()}
+    return sort_by(input_map=tdh, key_sort=lambda x: du.parse(x[0]))
+
+def visualize_split(**kwargs):
+    split, gs, tg = kwargs['split'], kwargs['game_info'], kwargs['total_games']
+
+    train = split_by_date(split=split[0], game_info=gs)
+    test = split_by_date(split=split[1], game_info=gs)  
+
+    for tr, tst in zip(train, test):
+        print("train: %s\ttest: %s" % (str(tr), str(tst)))
+
+    print("Defensive test. Intersection of train and test should be empty, (intersection train test): " 
+          + str(set(split[0]).intersection(set(split[1]))))
+    print("Addition of splits should equal total games. Total games: %s Addition: %s" 
+          % (str(tg), str(len(split[0]) + len(split[1]))))
 
 def main(args):
     if len(args) == 2:
@@ -146,8 +171,7 @@ def main(args):
         game_count = {k: len(histo[k]) for k in histo.keys()}
         split = split_data(game_histo=histo, split_percentage=0.85, histo_count=game_count)
 
-        for e in split:
-            print(len(e))
+        visualize_split(split=split, game_info=gs, total_games=len(avgs))
 
         #data = input_data(game_averages=avgs, labels=labels)
         
