@@ -148,6 +148,7 @@ def main(args):
         split = split_data(game_histo=histo, split_percentage=0.85, 
                            histo_count={k: len(histo[k]) for k in histo.keys()})
 
+        visualize_split(split=split, game_info=gs, total_games=len(avgs))
         #data = input_data(game_averages=avgs, labels=labels)
         
         #print("len features: %d, len labels: %d" % (len(data[0]), len(data[1])))
