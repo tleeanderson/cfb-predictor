@@ -145,8 +145,8 @@ def main(args):
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)        
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
-        game_count = {k: len(histo[k]) for k in histo.keys()}
-        split = split_data(game_histo=histo, split_percentage=0.85, histo_count=game_count)
+        split = split_data(game_histo=histo, split_percentage=0.85, 
+                           histo_count={k: len(histo[k]) for k in histo.keys()})
 
         #data = input_data(game_averages=avgs, labels=labels)
         
