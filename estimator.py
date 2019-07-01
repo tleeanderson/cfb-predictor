@@ -183,9 +183,17 @@ def model_fn(features, labels, mode, params):
     tf.summary.histogram('input_layer', net)
 
     for units in params['hidden_units']:
-        net = tf.layers.dense(net, units=units, activation=tf.nn.relu)
+        net = tf.layers.dense(net, units=units, activation=None, 
+                              kernel_initializer=tf.initializers.truncated_normal(), 
+                              kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
+        tf.summary.histogram('weights_' + str(units), net)
+
+        net = tf.nn.relu(net, name='ReLU_' + str(units))
+        tf.summary.histogram('activations_' + str(units), net)
     
     logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
+    tf.summary.histogram('logits_' + str(2), logits)
+
     predicted_classes = tf.argmax(logits, 1)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -201,7 +209,6 @@ def model_fn(features, labels, mode, params):
                                    predictions=predicted_classes,
                                    name='acc_op')
 
-    tf.summary.histogram('weights', net)
     tf.summary.scalar('accuracy', accuracy[1])
 
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -239,7 +246,7 @@ def run_model(**kwargs):
         feature_columns.append(tf.feature_column.numeric_column(key=key))
 
     classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_columns, 
-                                                                   'hidden_units': [2], 
+                                                                   'hidden_units': [10], 
                                                                    'num_classes': 2})
     classifier.train(input_fn=lambda: train_input_fn(train_features, train_labels, BATCH_SIZE),
                      steps=TRAIN_STEPS)
@@ -275,7 +282,7 @@ def evaluate_model(**kwargs):
         split = static_split_data(game_histo=histo, split_percentage=0.85,
                               histo_count={k: len(histo[k]) for k in histo.keys()})
         eval_result = run_model(team_avgs=avgs, split=split, labels=labels)
-        eval_result['Split'] = split
+        #eval_result['Split'] = split
         model_acc[season_dir] = eval_result
 
     return model_acc
@@ -287,7 +294,7 @@ def write_to_disk(**kwargs):
         pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
 def main(args):
-    if len(args) == 5:
+    if len(args) == 3:
         data = evaluate_model(directory=args[1], prefix=args[2])
         # if args[3]:
         #     write_to_disk(data=data, file_name=str(int(time.time())) + '.model_eval', 
