@@ -188,7 +188,8 @@ def model_fn(features, labels, mode, params):
                               kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
         tf.summary.histogram('weights_' + str(units), net)
 
-        net = tf.nn.relu(net, name='ReLU_' + str(units))
+        #net = tf.nn.relu(net, name='ReLU_' + str(units))
+        net = tf.math.sigmoid(net, name='sigmoid_' + str(units))
         tf.summary.histogram('activations_' + str(units), net)
     
     logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
