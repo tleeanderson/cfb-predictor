@@ -1,3 +1,4 @@
 *.txt
 *.pyc
-high_acc_models
+accuracy_analysis
+*.sh
