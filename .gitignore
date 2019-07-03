@@ -1,4 +1,4 @@
 *.txt
 *.pyc
 accuracy_analysis
-*.sh
+*.test.sh

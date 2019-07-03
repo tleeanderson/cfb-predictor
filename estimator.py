@@ -9,6 +9,11 @@ import math
 import random
 from random import randint
 import tensorflow as tf
+import glob
+import os.path as path
+import pickle
+import time
+import distribution_analysis as da
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -80,7 +85,7 @@ def sort_by(**kwargs):
 
     return lis
 
-def split_data(**kwargs):
+def stochastic_split_data(**kwargs):
     gh, sp, shc = kwargs['game_histo'], float(kwargs['split_percentage']), kwargs['histo_count']
 
     train = []
@@ -111,6 +116,43 @@ def split_data(**kwargs):
 
     return train, test
 
+def static_split_data(**kwargs):
+    gh, sp, shc = kwargs['game_histo'], float(kwargs['split_percentage']), kwargs['histo_count']
+
+    train = []
+    test = []
+    train_divi = True
+    keys = list(gh.keys())
+    keys.sort(key=lambda x: du.parse(x))
+    for d in keys:
+        count = shc[d]
+        k = d
+        if count == 1:
+            if train_divi:
+                train.append(gh[k][0])
+                train_divi = False
+            else:
+                test.append(gh[k][0])
+                train_divi = True
+        elif count == 2:
+            train.append(gh[k][0])
+            test.append(gh[k][1])
+        else:
+            train_split = int(round(count * sp))
+            test_split = count - train_split
+            if test_split == 0:
+                train_split = int(math.ceil(float(count) / 2))
+            num_games = len(gh[k])
+            ind_range = set(range(num_games))
+            train_ind = set(range(int(math.floor(num_games * sp))))
+            test_ind = ind_range.difference(train_ind)
+            train += [gh[k][e] for e in train_ind]
+            test += [gh[k][e] for e in test_ind] 
+
+    train.sort()
+    test.sort()
+    return train, test
+
 def split_by_date(**kwargs):
     split, gs = kwargs['split'], kwargs['game_info']
 
@@ -139,10 +181,20 @@ def visualize_split(**kwargs):
 
 def model_fn(features, labels, mode, params):
     net = tf.feature_column.input_layer(features, params['feature_columns'])
+    tf.summary.histogram('input_layer', net)
+
     for units in params['hidden_units']:
-        net = tf.layers.dense(net, units=units, activation=tf.nn.relu)
+        net = tf.layers.dense(net, units=units, activation=None, 
+                              kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
+        tf.summary.histogram('weights_' + str(units), net)
+
+        net = tf.nn.relu(net, name='ReLU_' + str(units))
+        tf.summary.histogram('activations_' + str(units), net)
     
-    logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
+    logits = tf.layers.dense(net, units=params['num_classes'], activation=None, 
+                             kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
+    tf.summary.histogram('logits_' + str(2), logits)
+
     predicted_classes = tf.argmax(logits, 1)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -157,11 +209,11 @@ def model_fn(features, labels, mode, params):
     accuracy = tf.metrics.accuracy(labels=labels,
                                    predictions=predicted_classes,
                                    name='acc_op')
-    metrics = {'accuracy': accuracy}
+
     tf.summary.scalar('accuracy', accuracy[1])
 
     if mode == tf.estimator.ModeKeys.EVAL:
-        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics)
+        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops={'accuracy': accuracy})
     
     assert mode == tf.estimator.ModeKeys.TRAIN
 
@@ -182,26 +234,44 @@ def eval_input_fn(features, labels, batch_size):
 
     return dataset
 
+def z_scores(**kwargs):
+    fs = kwargs['data']
+    
+    return {f: da.z_scores(data=fs[f]) for f in fs.keys()}
+
+def print_scores(**kwargs):
+    scores = kwargs['scores']
+
+    for s, data in scores.iteritems():
+        mi = min(data)
+        mx = max(data)
+        print((s, mi, mx, mx - mi))
+        
+    raw_input()
+
 def run_model(**kwargs):
     avgs, split, labels = kwargs['team_avgs'], kwargs['split'], kwargs['labels']
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
+    train_features = z_scores(data=train_features)
     test_features, test_labels = input_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
                                             labels=labels)
+    test_features = z_scores(data=test_features)
+
     feature_columns = []
     for key in train_features.keys():
         feature_columns.append(tf.feature_column.numeric_column(key=key))
 
     classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_columns, 
-                                                                   'hidden_units': [10, 10], 
+                                                                   'hidden_units': [5], 
                                                                    'num_classes': 2})
     classifier.train(input_fn=lambda: train_input_fn(train_features, train_labels, BATCH_SIZE),
                      steps=TRAIN_STEPS)
     eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(test_features, 
                                                                      test_labels, BATCH_SIZE))
 
-    print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**eval_result))
+    return eval_result
 
 BATCH_SIZE = 20
 TRAIN_STEPS = 2000
@@ -213,21 +283,42 @@ def rename_keys(**kwargs):
         for tid, stats in teams.iteritems():
             for name in stats.keys():
                 stats[name.replace(' ', '-')] = stats.pop(name)
-    return team_stats
+    return team_stats    
 
-def main(args):
-    if len(args) == 2:
-        gs = temp_lib.game_stats(directory=args[1])
-        team_stats = temp_lib.team_game_stats(directory=args[1])
-        team_stats = rename_keys(team_stats=team_stats)
+def evaluate_model(**kwargs):
+    directory, prefix = kwargs['directory'], kwargs['prefix']
+
+    model_acc = {}
+    for season_dir in glob.glob(path.join(directory, prefix)):
+        gs = temp_lib.game_stats(directory=season_dir)
+        team_stats = rename_keys(team_stats=temp_lib.team_game_stats(directory=season_dir))
 
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)        
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
-        split = split_data(game_histo=histo, split_percentage=0.85, 
-                           histo_count={k: len(histo[k]) for k in histo.keys()})
-        run_model(team_avgs=avgs, split=split, labels=labels)
+        split = static_split_data(game_histo=histo, split_percentage=0.85,
+                              histo_count={k: len(histo[k]) for k in histo.keys()})
+
+        eval_result = run_model(team_avgs=avgs, split=split, labels=labels)
+        eval_result['Split'] = split
+        model_acc[season_dir] = eval_result
+
+    return model_acc
+
+def write_to_disk(**kwargs):
+    directory, data, file_name = kwargs['directory'], kwargs['data'], kwargs['file_name']
+
+    with open(path.join(directory, file_name), 'wb') as fh:
+        pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+def main(args):
+    data = evaluate_model(directory=args[1], prefix=args[2])
+    if len(args) == 4:        
+        write_to_disk(data=data, file_name=str(int(time.time())) + '.model_eval', 
+                  directory=args[3])
+    elif len(args) == 3:
+        print(data)
     else:
         print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
 

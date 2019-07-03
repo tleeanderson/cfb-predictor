@@ -65,7 +65,7 @@ def print_summary(**kwargs):
     model_meta = {}
     model_meta['max_accuracy'] = max(accs)
     model_meta['min_accuracy'] = min(accs)
-    model_meta['range_acc'] =  model_meta['max_accuracy'] - model_meta['min_accuracy']
+    model_meta['range_acc'] = model_meta['max_accuracy'] - model_meta['min_accuracy']
     model_meta['average'] = np.average(accs)
 
     print("\n")
