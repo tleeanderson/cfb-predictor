@@ -263,7 +263,7 @@ def run_model(**kwargs):
         feature_columns.append(tf.feature_column.numeric_column(key=key))
 
     classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_columns, 
-                                                                   'hidden_units': [10], 
+                                                                   'hidden_units': [5], 
                                                                    'num_classes': 2})
     classifier.train(input_fn=lambda: train_input_fn(train_features, train_labels, BATCH_SIZE),
                      steps=TRAIN_STEPS)
