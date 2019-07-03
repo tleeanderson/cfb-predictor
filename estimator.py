@@ -183,13 +183,10 @@ def model_fn(features, labels, mode, params):
     tf.summary.histogram('input_layer', net)
 
     for units in params['hidden_units']:
-        net = tf.layers.dense(net, units=units, activation=None, 
-                              kernel_initializer=tf.initializers.truncated_normal(), 
-                              kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
+        net = tf.layers.dense(net, units=units, activation=None)
         tf.summary.histogram('weights_' + str(units), net)
 
-        #net = tf.nn.relu(net, name='ReLU_' + str(units))
-        net = tf.math.sigmoid(net, name='sigmoid_' + str(units))
+        net = tf.nn.relu(net, name='ReLU_' + str(units))
         tf.summary.histogram('activations_' + str(units), net)
     
     logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
@@ -256,7 +253,7 @@ def run_model(**kwargs):
 
     return eval_result
 
-BATCH_SIZE = 20
+BATCH_SIZE = 1
 TRAIN_STEPS = 2000
 
 def rename_keys(**kwargs):
