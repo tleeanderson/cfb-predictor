@@ -184,13 +184,15 @@ def model_fn(features, labels, mode, params):
     tf.summary.histogram('input_layer', net)
 
     for units in params['hidden_units']:
-        net = tf.layers.dense(net, units=units, activation=None)
+        net = tf.layers.dense(net, units=units, activation=None, 
+                              kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
         tf.summary.histogram('weights_' + str(units), net)
 
         net = tf.nn.relu(net, name='ReLU_' + str(units))
         tf.summary.histogram('activations_' + str(units), net)
     
-    logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
+    logits = tf.layers.dense(net, units=params['num_classes'], activation=None, 
+                             kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
     tf.summary.histogram('logits_' + str(2), logits)
 
     predicted_classes = tf.argmax(logits, 1)
@@ -220,9 +222,8 @@ def model_fn(features, labels, mode, params):
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
 def train_input_fn(features, labels, batch_size):
-    # return tf.data.Dataset.from_tensor_slices((dict(features), labels))\
-    #                          .shuffle(1000).repeat().batch(batch_size)
-    return tf.data.Dataset.from_tensor_slices((dict(features), labels)).repeat().batch(batch_size)
+    return tf.data.Dataset.from_tensor_slices((dict(features), labels))\
+                             .shuffle(1000).repeat().batch(batch_size)
     
 def eval_input_fn(features, labels, batch_size):
     features=dict(features)
@@ -300,7 +301,7 @@ def evaluate_model(**kwargs):
                               histo_count={k: len(histo[k]) for k in histo.keys()})
 
         eval_result = run_model(team_avgs=avgs, split=split, labels=labels)
-        #eval_result['Split'] = split
+        eval_result['Split'] = split
         model_acc[season_dir] = eval_result
 
     return model_acc
@@ -312,12 +313,11 @@ def write_to_disk(**kwargs):
         pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
 def main(args):
-    if len(args) == 3:
-        data = evaluate_model(directory=args[1], prefix=args[2])
-        # if args[3]:
-        #     write_to_disk(data=data, file_name=str(int(time.time())) + '.model_eval', 
-        #               directory=args[4])
-        # else:
+    data = evaluate_model(directory=args[1], prefix=args[2])
+    if len(args) == 4:        
+        write_to_disk(data=data, file_name=str(int(time.time())) + '.model_eval', 
+                  directory=args[3])
+    elif len(args) == 3:
         print(data)
     else:
         print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
