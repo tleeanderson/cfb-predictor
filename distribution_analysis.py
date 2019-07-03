@@ -7,6 +7,7 @@ import sys
 import glob
 import os.path as path
 from scipy.stats import shapiro
+import numpy as np
 
 #There seems to be a correlation between the statistic value of the Shapiro-Wilk test and the 
 #"normality" of the given distribution. We will say that any distribution with a statistic 
@@ -90,26 +91,34 @@ def normal_dists(**kwargs):
     
     return norms
 
-def data_by_file(**kwargs):
-    d, pre = kwargs['directory'], kwargs['prefix']
+def z_scores(**kwargs):
+    data = kwargs['data']
+
+    avg = np.average(data)
+    stddev = np.std(data)
+
+    return map(lambda d: (d - avg) / stddev, data)        
+
+# def data_by_file(**kwargs):
+#     d, pre = kwargs['directory'], kwargs['prefix']
     
-    data_by_file = {}
-    for data_dir in glob.glob(path.join(d, pre)):
-        stats = temp_lib.team_game_stats(directory=data_dir)
-        game_data = temp_lib.game_stats(directory=data_dir)
+#     data_by_file = {}
+#     for data_dir in glob.glob(path.join(d, pre)):
+#         stats = temp_lib.team_game_stats(directory=data_dir)
+#         game_data = temp_lib.game_stats(directory=data_dir)
         
-        avgs = est.averages(team_game_stats=stats, game_infos=game_data, skip_fields=model.UNDECIDED_FIELDS)
-        data_by_file[data_dir] = {'avgs': avgs, 'team_stats': stats, 'game_info': game_data}
+#         avgs = est.averages(team_game_stats=stats, game_infos=game_data, skip_fields=model.UNDECIDED_FIELDS)
+#         data_by_file[data_dir] = {'avgs': avgs, 'team_stats': stats, 'game_info': game_data}
 
-    return data_by_file
+#     return data_by_file
 
-def main(args):
-    if len(args) == 3:
-        data = data_by_file(directory=args[1], prefix=args[2])
-        norms = normal_dists(data_by_file=data['/home/tanderson/datasets/cfb/cfbstats-com-2005-1-5-0'])
-        print("norms: %s" % (str(len(norms))))
-    else:
-        print("Usage: %s [directory] [prefix]" % ('./' + str(args[0])))
+# def main(args):
+#     if len(args) == 3:
+#         data = data_by_file(directory=args[1], prefix=args[2])
+#         norms = normal_dists(data_by_file=data['/home/tanderson/datasets/cfb/cfbstats-com-2005-1-5-0'])
+#         print("norms: %s" % (str(len(norms))))
+#     else:
+#         print("Usage: %s [directory] [prefix]" % ('./' + str(args[0])))
 
-if __name__ == '__main__':
-    main(sys.argv)
+# if __name__ == '__main__':
+#     main(sys.argv)

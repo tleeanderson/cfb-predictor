@@ -13,6 +13,7 @@ import glob
 import os.path as path
 import pickle
 import time
+import distribution_analysis as da
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -232,13 +233,31 @@ def eval_input_fn(features, labels, batch_size):
 
     return dataset
 
+def z_scores(**kwargs):
+    fs = kwargs['data']
+    
+    return {f: da.z_scores(data=fs[f]) for f in fs.keys()}
+
+def print_scores(**kwargs):
+    scores = kwargs['scores']
+
+    for s, data in scores.iteritems():
+        mi = min(data)
+        mx = max(data)
+        print((s, mi, mx, mx - mi))
+        
+    raw_input()
+
 def run_model(**kwargs):
     avgs, split, labels = kwargs['team_avgs'], kwargs['split'], kwargs['labels']
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
+    train_features = z_scores(data=train_features)
     test_features, test_labels = input_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
                                             labels=labels)
+    test_features = z_scores(data=test_features)
+
     feature_columns = []
     for key in train_features.keys():
         feature_columns.append(tf.feature_column.numeric_column(key=key))
@@ -253,7 +272,7 @@ def run_model(**kwargs):
 
     return eval_result
 
-BATCH_SIZE = 1
+BATCH_SIZE = 20
 TRAIN_STEPS = 2000
 
 def rename_keys(**kwargs):
@@ -263,7 +282,7 @@ def rename_keys(**kwargs):
         for tid, stats in teams.iteritems():
             for name in stats.keys():
                 stats[name.replace(' ', '-')] = stats.pop(name)
-    return team_stats
+    return team_stats    
 
 def evaluate_model(**kwargs):
     directory, prefix = kwargs['directory'], kwargs['prefix']
@@ -279,6 +298,7 @@ def evaluate_model(**kwargs):
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
         split = static_split_data(game_histo=histo, split_percentage=0.85,
                               histo_count={k: len(histo[k]) for k in histo.keys()})
+
         eval_result = run_model(team_avgs=avgs, split=split, labels=labels)
         #eval_result['Split'] = split
         model_acc[season_dir] = eval_result
