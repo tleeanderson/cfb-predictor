@@ -82,11 +82,9 @@ def normality_filter(**kwargs):
     return result
 
 def normal_dists(**kwargs):
-    data = kwargs['data_by_file']
+    f_avgs = kwargs['field_avgs']
         
-    fields, _ = est.input_data(game_averages=data['avgs'], 
-                               labels=tgs.add_labels(team_game_stats=data['team_stats']))
-    sw = shapiro_wilk(distributions=fields)
+    sw = shapiro_wilk(distributions=f_avgs)
     norms = normality_filter(shapiro_wilk=sw, threshold=SW_NORM_THRESHOLD)
     
     return norms

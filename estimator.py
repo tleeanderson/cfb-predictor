@@ -15,6 +15,8 @@ import pickle
 import time
 import distribution_analysis as da
 
+TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
+
 def loop_through(**kwargs):
     data = kwargs['data']
 
@@ -53,7 +55,7 @@ def input_data(**kwargs):
         for ta, feature_team_id, fid in zip(team_avgs.iteritems(), ['-0', '-1'], [0, 1]):
             tid, stats = ta
             for name, value in stats.iteritems():
-                stat_key = name + feature_team_id
+                stat_key = TF_FEATURE_NAME(name + feature_team_id)
                 if stat_key not in features:
                     features[stat_key] = []
                 features[stat_key].append(value)
@@ -250,20 +252,23 @@ def print_scores(**kwargs):
     raw_input()
 
 def run_model(**kwargs):
-    avgs, split, labels = kwargs['team_avgs'], kwargs['split'], kwargs['labels']
+    avgs, split, labels, feat = kwargs['team_avgs'], kwargs['split'], kwargs['labels'],\
+                                kwargs['features']
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
     train_features = z_scores(data=train_features)
+    train_features = {tf: train_features[tf] for tf in feat}
     test_features, test_labels = input_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
                                             labels=labels)
     test_features = z_scores(data=test_features)
+    test_features = {tf: test_features[tf] for tf in feat}
 
-    feature_columns = []
-    for key in train_features.keys():
-        feature_columns.append(tf.feature_column.numeric_column(key=key))
-
-    classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_columns, 
+    feature_cols = []
+    for f in feat:
+        feature_cols.append(tf.feature_column.numeric_column(key=f))
+      
+    classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_cols, 
                                                                    'hidden_units': [5], 
                                                                    'num_classes': 2})
     classifier.train(input_fn=lambda: train_input_fn(train_features, train_labels, BATCH_SIZE),
@@ -276,31 +281,23 @@ def run_model(**kwargs):
 BATCH_SIZE = 20
 TRAIN_STEPS = 2000
 
-def rename_keys(**kwargs):
-    team_stats = copy.deepcopy(kwargs['team_stats'])
-
-    for gid, teams in team_stats.iteritems():
-        for tid, stats in teams.iteritems():
-            for name in stats.keys():
-                stats[name.replace(' ', '-')] = stats.pop(name)
-    return team_stats    
-
 def evaluate_model(**kwargs):
     directory, prefix = kwargs['directory'], kwargs['prefix']
 
     model_acc = {}
     for season_dir in glob.glob(path.join(directory, prefix)):
         gs = temp_lib.game_stats(directory=season_dir)
-        team_stats = rename_keys(team_stats=temp_lib.team_game_stats(directory=season_dir))
-
+        team_stats = temp_lib.team_game_stats(directory=season_dir)
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)        
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
-        split = static_split_data(game_histo=histo, split_percentage=0.85,
+        split = stochastic_split_data(game_histo=histo, split_percentage=0.85,
                               histo_count={k: len(histo[k]) for k in histo.keys()})
 
-        eval_result = run_model(team_avgs=avgs, split=split, labels=labels)
+        features = da.normal_dists(field_avgs=input_data(game_averages=avgs, labels=labels)[0])\
+                     .keys()
+        eval_result = run_model(team_avgs=avgs, split=split, labels=labels, features=features)
         eval_result['Split'] = split
         model_acc[season_dir] = eval_result
 
