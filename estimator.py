@@ -16,6 +16,8 @@ import time
 import distribution_analysis as da
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
+BATCH_SIZE = 20
+TRAIN_STEPS = 2000
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -185,16 +187,19 @@ def model_fn(features, labels, mode, params):
     net = tf.feature_column.input_layer(features, params['feature_columns'])
     tf.summary.histogram('input_layer', net)
 
-    for units in params['hidden_units']:
+    for units, num in zip(params['hidden_units'], range(len(params['hidden_units']))):
         net = tf.layers.dense(net, units=units, activation=None, 
                               kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
-        tf.summary.histogram('weights_' + str(units), net)
+        #net = tf.layers.dense(net, units=units, activation=None)
+
+        tf.summary.histogram("weights_%s_%s" % (str(units), str(num)), net)
 
         net = tf.nn.relu(net, name='ReLU_' + str(units))
-        tf.summary.histogram('activations_' + str(units), net)
+        tf.summary.histogram("activations_%s_%s" % (str(units), str(num)), net)
     
     logits = tf.layers.dense(net, units=params['num_classes'], activation=None, 
-                             kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
+                              kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
+    #logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
     tf.summary.histogram('logits_' + str(2), logits)
 
     predicted_classes = tf.argmax(logits, 1)
@@ -268,18 +273,26 @@ def run_model(**kwargs):
     for f in feat:
         feature_cols.append(tf.feature_column.numeric_column(key=f))
       
-    classifier = tf.estimator.Estimator(model_fn=model_fn, params={'feature_columns': feature_cols, 
+
+    run_config = tf.estimator.RunConfig(save_checkpoints_steps=100)
+    classifier = tf.estimator.Estimator(model_fn=model_fn, 
+                                        params={'feature_columns': feature_cols, 
                                                                    'hidden_units': [5], 
-                                                                   'num_classes': 2})
-    classifier.train(input_fn=lambda: train_input_fn(train_features, train_labels, BATCH_SIZE),
-                     steps=TRAIN_STEPS)
-    eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(test_features, 
-                                                                     test_labels, BATCH_SIZE))
+                                                                   'num_classes': 2}, 
+                                        config=run_config, 
+                                        model_dir='/home/tanderson/git/cfb-predictor/model_out/run3')
+    train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_features, 
+                                                                        train_labels, BATCH_SIZE), 
+                                        max_steps=TRAIN_STEPS)
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(test_features, 
+                                                                     test_labels, BATCH_SIZE), 
+                                      throttle_secs=1)
+    tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
-    return eval_result
+    return {}
+    #return eval_result
 
-BATCH_SIZE = 20
-TRAIN_STEPS = 2000
+
 
 def evaluate_model(**kwargs):
     directory, prefix = kwargs['directory'], kwargs['prefix']

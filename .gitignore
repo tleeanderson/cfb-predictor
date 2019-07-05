@@ -2,3 +2,4 @@
 *.pyc
 accuracy_analysis
 *.test.sh
+model_out
