@@ -17,7 +17,7 @@ import distribution_analysis as da
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
-TRAIN_STEPS = 2000
+TRAIN_STEPS = 3000
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -184,22 +184,53 @@ def visualize_split(**kwargs):
           % (str(tg), str(len(split[0]) + len(split[1]))))
 
 def model_fn(features, labels, mode, params):
+    print("feature_columns len %s, features len %s" % (str(len(params['feature_columns'])), 
+          str(len(features))))
     net = tf.feature_column.input_layer(features, params['feature_columns'])
+
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        ub = len(features)
+        #stochastically randomize whole or not
+        # net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], 
+        #         maxval=int(params['shuffle_rate']), dtype=tf.int32))[0], 
+        #         true_fn=lambda: tf.random_shuffle(gf), 
+        #         false_fn=lambda: gf), net)
+
+
+        #stochastically randomize either bottom or top half
+        # keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0], 
+        #                   true_fn=lambda: tf.range(0, ub / 2), 
+        #                   false_fn=lambda: tf.range(ub / 2, ub))
+
+        # randomize_range = tf.sets.difference([tf.range(ub)], [keep_range]).values
+        # net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=10, dtype=tf.int32))[0], 
+        #                                    true_fn=lambda: tf.gather(gf, tf.concat([keep_range, 
+        #                                                     tf.random_shuffle(randomize_range)], axis=0)), 
+        #                                    false_fn=lambda: gf), net)
+        # net = tf.reshape(net, [-1, ub])
+        
+        #always shuffle all the time for all of the vector
+        # net = tf.map_fn(lambda gf: tf.random_shuffle(gf), net)
+
+    print("net shape: %s" % (str(net.shape)))
+    #exit(0)
+
     tf.summary.histogram('input_layer', net)
+    #net = tf.nn.dropout(net, keep_prob=0.9)
 
     for units, num in zip(params['hidden_units'], range(len(params['hidden_units']))):
-        net = tf.layers.dense(net, units=units, activation=None, 
-                              kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
-        #net = tf.layers.dense(net, units=units, activation=None)
+        # net = tf.layers.dense(net, units=units, activation=None, 
+        #                       kernel_regularizer=tf.contrib.layers.l2_regularizer(0.2))
+        net = tf.layers.dense(net, units=units, activation=None)
 
         tf.summary.histogram("weights_%s_%s" % (str(units), str(num)), net)
 
         net = tf.nn.relu(net, name='ReLU_' + str(units))
         tf.summary.histogram("activations_%s_%s" % (str(units), str(num)), net)
     
-    logits = tf.layers.dense(net, units=params['num_classes'], activation=None, 
-                              kernel_regularizer=tf.contrib.layers.l2_regularizer(1.0))
-    #logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
+    # logits = tf.layers.dense(net, units=params['num_classes'], activation=None, 
+    #                           kernel_regularizer=tf.contrib.layers.l2_regularizer(0.5))
+    logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
     tf.summary.histogram('logits_' + str(2), logits)
 
     predicted_classes = tf.argmax(logits, 1)
@@ -271,16 +302,17 @@ def run_model(**kwargs):
 
     feature_cols = []
     for f in feat:
-        feature_cols.append(tf.feature_column.numeric_column(key=f))
-      
+        feature_cols.append(tf.feature_column.numeric_column(key=f))      
 
     run_config = tf.estimator.RunConfig(save_checkpoints_steps=100)
     classifier = tf.estimator.Estimator(model_fn=model_fn, 
                                         params={'feature_columns': feature_cols, 
-                                                                   'hidden_units': [5], 
-                                                                   'num_classes': 2}, 
+                                                                   'hidden_units': [7], 
+                                                                   'num_classes': 2, 
+                                                'shuffle_rate': 2}, 
                                         config=run_config, 
-                                        model_dir='/home/tanderson/git/cfb-predictor/model_out/run3')
+                                        model_dir='/home/tanderson/git/cfb-predictor/model_out/test_run_' 
+                                        + str(random.randint(0, sys.maxint)))
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_features, 
                                                                         train_labels, BATCH_SIZE), 
                                         max_steps=TRAIN_STEPS)
@@ -291,8 +323,6 @@ def run_model(**kwargs):
 
     return {}
     #return eval_result
-
-
 
 def evaluate_model(**kwargs):
     directory, prefix = kwargs['directory'], kwargs['prefix']
@@ -305,7 +335,7 @@ def evaluate_model(**kwargs):
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)        
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
-        split = stochastic_split_data(game_histo=histo, split_percentage=0.85,
+        split = stochastic_split_data(game_histo=histo, split_percentage=0.90,
                               histo_count={k: len(histo[k]) for k in histo.keys()})
 
         features = da.normal_dists(field_avgs=input_data(game_averages=avgs, labels=labels)[0])\

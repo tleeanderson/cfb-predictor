@@ -9,14 +9,22 @@ UNDECIDED_FIELDS = {'Field Goal Att', 'Rush Att', 'Time Of Possession', 'Kickoff
 'Pass TD', 'Field Goal Made', 'Pass Comp', 'Rush TD', 'Misc Ret', 'Kickoff Touchback', 'Off 2XP Att',
 'Fourth Down Att', 'Off XP Kick Att', 'Pass Att', 'Off 2XP Made', 'Kickoff Ret', 'Pass Conv'}
 
-FIELD_WIN_SEMANTICS = {('Red Zone Att', 'Tackle For Loss Yard', 'Fourth Down Conv', 'QB Hurry', 'Safety',
+ORIGINAL_MAX = ('Red Zone Att', 'Tackle For Loss Yard', 'Fourth Down Conv', 'QB Hurry', 'Safety',
 'Int Ret', 'Int Ret TD', 'Punt Ret Yard', 'Kickoff Yard', 'Fum Ret Yard', 'Pass Yard', 'Fumble Forced', 
 'Red Zone TD', 'Misc Ret TD', 'Tackle Assist', 'Kickoff Ret TD', 'Punt Ret', 'Fum Ret', 'Points', 
 'Misc Ret Yard', 'Pass Int', 'Int Ret Yard', 'Kick/Punt Blocked', 'Punt Yard', 
 'Tackle For Loss', 'Kickoff Ret Yard', 'Third Down Conv', 'Fum Ret TD', 'Tackle Solo', 'Sack', 'Rush Yard',
-'Sack Yard', 'Punt Ret TD', 'Pass Broken Up'): MAX_COMPARE,
-('Kickoff Out-Of-Bounds', 'Penalty', 'Fumble', 'Penalty Yard', 'Punt', '1st Down Penalty', 
-'Third Down Att', 'Fumble Lost'): MIN_COMPARE}
+'Sack Yard', 'Punt Ret TD', 'Pass Broken Up')
+ORIGINAL_MIN = ('Kickoff Out-Of-Bounds', 'Penalty', 'Fumble', 'Penalty Yard', 'Punt', '1st Down Penalty', 
+'Third Down Att', 'Fumble Lost')
+
+CURRENT_MIN = ('Punt', '1st Down Penalty', 'Pass Int', 'Penalty', 'Fumble', 'Third Down Att')
+CURRENT_MAX = ('Red Zone Att', 'Points', 'Fumble Lost', 'Pass Yard', 'Fumble Forced', 'Tackle For Loss', 'Tackle For Loss Yard', 'Kickoff Ret Yard', 'Red Zone TD', 'Fourth Down Conv', 'Pass Broken Up', 'Punt Ret', 'Kickoff Yard', 'Tackle Solo', 'Penalty Yard', 'Rush Yard', 'Punt Ret Yard', 'Tackle Assist', 'Sack', 'Sack Yard', 'Int Ret Yard', 'Int Ret', 'Punt Yard', 'Third Down Conv')
+
+LEFTOVER_MAX = set(['Fum Ret', 'Pass Int', 'Fum Ret TD', 'Kickoff Ret TD', 'Fum Ret Yard', 'QB Hurry', 'Misc Ret TD', 'Misc Ret Yard', 'Int Ret TD', 'Safety', 'Kick/Punt Blocked', 'Punt Ret TD'])
+LEFTOVER_MIN = set(['Fumble Lost', 'Penalty Yard', 'Kickoff Out-Of-Bounds'])
+
+FIELD_WIN_SEMANTICS = {CURRENT_MAX: MAX_COMPARE, CURRENT_MIN: MIN_COMPARE}
 
 def attr_compare(**kwargs):
     v1, v2, compare = kwargs['v1'], kwargs['v2'], kwargs['compare']
@@ -62,7 +70,7 @@ def predict(**kwargs):
     if len(keys) == 2:
         prediction = eval_func(stat_map1=team_avgs[keys[0]], stat_map2=team_avgs[keys[1]], 
                                st1_key=keys[0], st2_key=keys[1], field_win=FIELD_WIN_SEMANTICS, 
-                               undec_fields=UNDECIDED_FIELDS)        
+                               undec_fields=UNDECIDED_FIELDS.union(LEFTOVER_MAX).union(LEFTOVER_MIN))
         prediction.update({'Winner': max(prediction.iteritems(), key=op.itemgetter(1))[0]})
         
         return prediction
