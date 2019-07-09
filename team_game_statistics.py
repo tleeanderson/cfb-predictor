@@ -52,6 +52,19 @@ def add_labels(**kwargs):
                                               'Total Points': sum(map(lambda t: t[0], points))}
     return team_game_stats
 
+def win_loss_pct(**kwargs):
+    tid1, games, ps = kwargs['tid1'], kwargs['games'], 'Points'
+
+    result = {}
+    result[tid1] = 0.0
+    for gid, stat in games.iteritems():
+        win_tid = max(map(lambda t: (stat[t][ps], t), stat))[1]
+        if win_tid == tid1:
+            result[tid1] += 1
+    result[tid1] = result[tid1] / len(games) if len(games) > 0 else 0.0
+
+    return result
+
 def averages(**kwargs):
     game_stats, team_ids = kwargs['game_stats'], kwargs['team_ids']
 

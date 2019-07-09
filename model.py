@@ -7,7 +7,7 @@ MIN_COMPARE = lambda v1, v2: attr_compare(v1=v1, v2=v2, compare=min)
 UNDECIDED_FIELDS = {'Field Goal Att', 'Rush Att', 'Time Of Possession', 'Kickoff', '1st Down Pass', 
 'Red Zone Field Goal', 'Kickoff Onside', 'Def 2XP Att', 'Off XP Kick Made', '1st Down Rush', 'Def 2XP Made', 
 'Pass TD', 'Field Goal Made', 'Pass Comp', 'Rush TD', 'Misc Ret', 'Kickoff Touchback', 'Off 2XP Att',
-'Fourth Down Att', 'Off XP Kick Att', 'Pass Att', 'Off 2XP Made', 'Kickoff Ret', 'Pass Conv'}
+'Fourth Down Att', 'Off XP Kick Att', 'Pass Att', 'Off 2XP Made', 'Kickoff Ret', 'Pass Conv', 'Win Loss Percentage'}
 
 ORIGINAL_MAX = ('Red Zone Att', 'Tackle For Loss Yard', 'Fourth Down Conv', 'QB Hurry', 'Safety',
 'Int Ret', 'Int Ret TD', 'Punt Ret Yard', 'Kickoff Yard', 'Fum Ret Yard', 'Pass Yard', 'Fumble Forced', 
@@ -92,7 +92,9 @@ def team_avgs(**kwargs):
         gb = game.subseason(team_games=games, game_code_id=game_code_id, 
                            compare=op.lt)
         games_to_avg = {gid: tg_stats[gid] for gid in map(lambda g: g[0], gb)}
-        avgs.update(tgs.averages(game_stats=games_to_avg, team_ids={tid}))
+        avgs.update(tgs.averages(game_stats=games_to_avg, team_ids={tid}))        
+        if len(gb) > 0:
+            avgs[tid]['Win Loss Percentage'] = tgs.win_loss_pct(tid1=tid, games=games_to_avg)        
     return avgs
 
 def predict_all(**kwargs):
