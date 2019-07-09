@@ -18,10 +18,15 @@ ORIGINAL_MAX = ('Red Zone Att', 'Tackle For Loss Yard', 'Fourth Down Conv', 'QB 
 ORIGINAL_MIN = ('Kickoff Out-Of-Bounds', 'Penalty', 'Fumble', 'Penalty Yard', 'Punt', '1st Down Penalty', 
 'Third Down Att', 'Fumble Lost')
 
-CURRENT_MIN = ('Punt', '1st Down Penalty', 'Pass Int', 'Penalty', 'Fumble', 'Third Down Att')
-CURRENT_MAX = ('Red Zone Att', 'Points', 'Fumble Lost', 'Pass Yard', 'Fumble Forced', 'Tackle For Loss', 'Tackle For Loss Yard', 'Kickoff Ret Yard', 'Red Zone TD', 'Fourth Down Conv', 'Pass Broken Up', 'Punt Ret', 'Kickoff Yard', 'Tackle Solo', 'Penalty Yard', 'Rush Yard', 'Punt Ret Yard', 'Tackle Assist', 'Sack', 'Sack Yard', 'Int Ret Yard', 'Int Ret', 'Punt Yard', 'Third Down Conv')
+CURRENT_MIN = ('Punt', '1st Down Penalty', 'Pass Int', 'Penalty', 'Fumble', 'Third Down Att', 'Fumble Lost', 
+               'Penalty Yard')
+CURRENT_MAX = ('Red Zone Att', 'Points', 'Pass Yard', 'Fumble Forced', 'Tackle For Loss', 
+'Tackle For Loss Yard', 'Kickoff Ret Yard', 'Red Zone TD', 'Fourth Down Conv', 'Pass Broken Up', 'Punt Ret', 
+'Kickoff Yard', 'Tackle Solo', 'Rush Yard', 'Punt Ret Yard', 'Tackle Assist', 'Sack', 'Sack Yard',
+'Int Ret Yard', 'Int Ret', 'Punt Yard', 'Third Down Conv')
 
-LEFTOVER_MAX = set(['Fum Ret', 'Pass Int', 'Fum Ret TD', 'Kickoff Ret TD', 'Fum Ret Yard', 'QB Hurry', 'Misc Ret TD', 'Misc Ret Yard', 'Int Ret TD', 'Safety', 'Kick/Punt Blocked', 'Punt Ret TD'])
+LEFTOVER_MAX = set(['Fum Ret', 'Pass Int', 'Fum Ret TD', 'Kickoff Ret TD', 'Fum Ret Yard', 'QB Hurry', 
+'Misc Ret TD', 'Misc Ret Yard', 'Int Ret TD', 'Safety', 'Kick/Punt Blocked', 'Punt Ret TD'])
 LEFTOVER_MIN = set(['Fumble Lost', 'Penalty Yard', 'Kickoff Out-Of-Bounds'])
 
 FIELD_WIN_SEMANTICS = {CURRENT_MAX: MAX_COMPARE, CURRENT_MIN: MIN_COMPARE}
@@ -57,10 +62,8 @@ def evaluation(**kwargs):
                 c1 += 1
             else:
                 c2 += 1
-    if c1 == c2:
-        pass
-        #print("comparison resulted in tie")
-    return {st1_key: c1, st2_key: c2}
+
+    return {st1_key: c1, st2_key: c2, 'tie': c1 == c2}
 
 def predict(**kwargs):
     team_avgs, game_code_id, tg_stats, eval_func = kwargs['team_avgs'], kwargs['game_code_id'],\
@@ -71,7 +74,8 @@ def predict(**kwargs):
         prediction = eval_func(stat_map1=team_avgs[keys[0]], stat_map2=team_avgs[keys[1]], 
                                st1_key=keys[0], st2_key=keys[1], field_win=FIELD_WIN_SEMANTICS, 
                                undec_fields=UNDECIDED_FIELDS.union(LEFTOVER_MAX).union(LEFTOVER_MIN))
-        prediction.update({'Winner': max(prediction.iteritems(), key=op.itemgetter(1))[0]})
+        prediction.update({'Winner': max(prediction.iteritems(), key=op.itemgetter(1))[0], 
+                           'tie': prediction['tie']})
         
         return prediction
     else:
@@ -111,8 +115,8 @@ def predict_all(**kwargs):
 
 def accuracy(**kwargs):
     tg_stats, predictions, winner, team_code, corr_key, incorr_key, total_key, sk, ak =\
-    kwargs['tg_stats'], kwargs['predictions'], 'Winner', 'Team Code', kwargs['corr_key'],\
-    kwargs['incorr_key'], kwargs['total_key'], kwargs['skip_keys'], kwargs['acc_key']
+    kwargs['tg_stats'], kwargs['predictions'], 'Winner', 'Team Code', kwargs['correct_key'],\
+    kwargs['incorrect_key'], kwargs['total_key'], kwargs['skip_keys'], kwargs['acc_key']
 
     result = {}
     for gid, pred in predictions.iteritems():
@@ -120,7 +124,7 @@ def accuracy(**kwargs):
             continue
         actual = tg_stats[gid][winner][team_code]
         p = pred[winner]
-        if actual == p:
+        if actual == p and not pred['tie']:
             if corr_key in result:
                 result[corr_key] += 1
             else:
@@ -134,3 +138,48 @@ def accuracy(**kwargs):
     result[total_key] = result[corr_key] + result[incorr_key]
     result[ak] = float(result[corr_key]) / result[total_key]
     return result
+
+def accuracy_by_date(**kwargs):
+    tg_stats, preds, gi, winner, tc, dt, ck, ik, tk, ak, sk = kwargs['tg_stats'], kwargs['predictions'],\
+                                                          kwargs['game_info'], 'Winner', 'Team Code',\
+                                                          'Date', kwargs['correct_key'], kwargs['incorrect_key'],\
+                                                          kwargs['total_key'], kwargs['acc_key'],\
+                                                          kwargs['skip_keys']
+
+    result = {}
+    for gid, info in preds.iteritems():
+        if gid in sk:
+            continue
+        info = gi[gid]
+        actual = tg_stats[gid][winner][tc]
+        p = preds[gid][winner]
+        if info[dt] not in result:
+            result[info[dt]] = {}
+        def_vals = filter(lambda k: result[info[dt]].get(k.keys()[0]) is None, 
+                          [{ck: 0}, {ak: 0}, {ik: 0}, {tk: 0}])
+        for df in def_vals:
+            result[info[dt]].update(df)
+        if actual == p:
+            result[info[dt]][ck] += 1
+        else:
+            result[info[dt]][ik] += 1
+
+    for k in result.keys():
+        result[k][tk] = result[k][ck] + result[k][ik]
+        result[k][ak] = float(result[k][ck]) / result[k][tk] if result[k][tk] > 0 else 0.0
+
+    return result
+
+def filter_by_total(**kwargs):
+    abd, hi = kwargs['acc_by_date'], kwargs['hi_total']
+
+    return {d: abd[d] for d in filter(lambda d: abd[d]['total'] > hi, abd)}
+
+def print_list():
+        #     lis = list(accuracy_by_date.iteritems())
+        # lis.sort(key=lambda x: du.parse(x[0]))
+        # for date in lis:
+        #     print(date)
+        # raw_input()
+    pass
+        

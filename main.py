@@ -7,6 +7,8 @@ import operator as op
 import model
 import glob
 import sys
+from dateutil import parser as du
+import matplotlib.pyplot as plt
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -38,9 +40,10 @@ def game_stats(**kwargs):
     return game_data
 
 def evaluate_model(**kwargs):
-    directory, prefix, no_pred = kwargs['directory'], kwargs['prefix'], 'no_pred'
+    directory, prefix, no_pred, model_fn = kwargs['directory'], kwargs['prefix'], 'no_pred',\
+                                          kwargs['model_fn']
     
-    model_acc = {}
+    result = {}
     for data_dir in glob.glob(path.join(directory, prefix)):
         stats = team_game_stats(directory=data_dir)
         game_data = game_stats(directory=data_dir)
@@ -48,20 +51,24 @@ def evaluate_model(**kwargs):
         preds = model.predict_all(team_game_stats=stats, game_infos=game_data, no_pred_key=no_pred)
         stats_labels = tgs.add_labels(team_game_stats=stats)
 
-        accuracy = model.accuracy(tg_stats=stats_labels, predictions=preds, corr_key='correct', 
-                                  incorr_key='incorrect', total_key='total', skip_keys={no_pred}, 
-                                  acc_key='accuracy')
-        model_acc[data_dir] = accuracy
-    
-    return model_acc
+
+        result[data_dir] = model_fn(tg_stats=stats_labels,
+                                          predictions=preds,
+                                          game_info=game_data, 
+                                          correct_key='correct', 
+                                          incorrect_key='incorrect', 
+                                          total_key='total', 
+                                          acc_key='accuracy', 
+                                          skip_keys={no_pred})
+    return result
 
 def print_summary(**kwargs):
-    model_acc = kwargs['model_acc']
+    acc = kwargs['acc']
 
-    for data_dir, ma in model_acc.iteritems():
+    for data_dir, ma in acc.iteritems():
         print("directory: %s, model_accuracy: %s" % (str(data_dir), str(ma)))
         
-    accs = map(lambda x: x[1]['accuracy'], model_acc.iteritems())
+    accs = map(lambda x: x[1]['accuracy'], acc.iteritems())
     model_meta = {}
     model_meta['max_accuracy'] = max(accs)
     model_meta['min_accuracy'] = min(accs)
@@ -75,13 +82,38 @@ def print_summary(**kwargs):
         print("%s: %s" % (str(stat), str(val)))
     print(('*' * 30) + ('*' * len(out_name)) + ('*' * 30))
 
+def histogram_by_date(**kwargs):
+    abd = kwargs['acc_by_date']
+
+    for s, s_acc in abd.iteritems():
+        plt.figure(num=s)
+        day_accs = map(lambda d: (d, s_acc[d]['accuracy']), s_acc)
+        day_accs.sort(key=lambda x: du.parse(x[0]))
+        ticks = np.arange(len(s_acc))
+        plt.bar(ticks, map(lambda d: d[1], day_accs), align='center', alpha=0.5)
+        plt.xticks(ticks, map(lambda d: d[0], day_accs))
+        plt.ylabel('Accuracy')
+        plt.title(s + ' Accuracy by Day')
+    plt.show()
+
 def main(args):
-    if len(args) == 3:
+    if len(args) == 4:
         #read in data
-        input_directory, prefix = args[1], args[2]
-        model_acc = evaluate_model(directory=input_directory, prefix=args[2])
-        print_summary(model_acc=model_acc)
-        #loop_through(data=tgs.add_labels(team_game_stats=stats))
+        input_directory, prefix, abd = args[1], args[2], args[3]
+        if abd == '--run-abd':
+            print("Histograming accuracy by date")
+            acc_by_date = evaluate_model(directory=input_directory, prefix=args[2], 
+                                               model_fn=model.accuracy_by_date)
+            filt_abd = {}
+            for s, s_acc in acc_by_date.iteritems():
+                filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, hi_total=10)
+
+            histogram_by_date(acc_by_date=filt_abd)
+        else:
+            print("Calculating accuracy by season")
+            acc = evaluate_model(directory=input_directory, prefix=args[2], 
+                                       model_fn=model.accuracy)
+            print_summary(acc=acc)
     else:
         print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
 
