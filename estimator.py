@@ -17,6 +17,7 @@ import distribution_analysis as da
 from proto import estimator_pb2
 from google.protobuf import text_format
 import argparse
+from google.protobuf.json_format import MessageToDict
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -186,37 +187,40 @@ def visualize_split(**kwargs):
     print("Addition of splits should equal total games. Total games: %s Addition: %s" 
           % (str(tg), str(len(split[0]) + len(split[1]))))
 
+def stochastically_randomize_vector(**kwargs):
+    in_net, r = kwargs['net'], kwargs['rate']
+    net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], 
+                                       maxval=int(r), dtype=tf.int32))[0], 
+                                       true_fn=lambda: tf.random_shuffle(gf), 
+                                       false_fn=lambda: gf), in_net)
+    return net
+
+def stochastically_randomize_half_vector(**kwargs):
+    in_net, r, ub = kwargs['net'], kwargs['rate'], kwargs['upper_bound']
+    keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0], 
+                         true_fn=lambda: tf.range(0, ub / 2), 
+                         false_fn=lambda: tf.range(ub / 2, ub))
+    randomize_range = tf.sets.difference([tf.range(ub)], [keep_range]).values
+    net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=r, dtype=tf.int32))[0], 
+                                           true_fn=lambda: tf.gather(gf, tf.concat([keep_range, 
+                                           tf.random_shuffle(randomize_range)], axis=0)), 
+                                           false_fn=lambda: gf), in_net)
+    return net
+
+def randomize_vector(**kwargs):
+    in_net = kwargs['net']
+    return tf.map_fn(lambda gf: tf.random_shuffle(gf), in_net)
+
 def model_fn(features, labels, mode, params):
-    print("feature_columns len %s, features len %s" % (str(len(params['feature_columns'])), 
-          str(len(features))))
+    #'hidden_units': map(lambda e: e[n], ec[hu])
+    ec, fc = params['estimator_config'], params['feature_columns']
+
     net = tf.feature_column.input_layer(features, params['feature_columns'])
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         ub = len(features)
-        #stochastically randomize whole or not
-        # net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], 
-        #         maxval=int(params['shuffle_rate']), dtype=tf.int32))[0], 
-        #         true_fn=lambda: tf.random_shuffle(gf), 
-        #         false_fn=lambda: gf), net)
-
-
-        #stochastically randomize either bottom or top half
-        # keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0], 
-        #                   true_fn=lambda: tf.range(0, ub / 2), 
-        #                   false_fn=lambda: tf.range(ub / 2, ub))
-
-        # randomize_range = tf.sets.difference([tf.range(ub)], [keep_range]).values
-        # net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=10, dtype=tf.int32))[0], 
-        #                                    true_fn=lambda: tf.gather(gf, tf.concat([keep_range, 
-        #                                                     tf.random_shuffle(randomize_range)], axis=0)), 
-        #                                    false_fn=lambda: gf), net)
-        # net = tf.reshape(net, [-1, ub])
         
-        #always shuffle all the time for all of the vector
-        # net = tf.map_fn(lambda gf: tf.random_shuffle(gf), net)
-
-    print("net shape: %s" % (str(net.shape)))
-    #exit(0)
+        net = tf.reshape(net, [-1, ub])
 
     tf.summary.histogram('input_layer', net)
     #net = tf.nn.dropout(net, keep_prob=0.9)
@@ -267,13 +271,7 @@ def train_input_fn(features, labels, batch_size):
                              .shuffle(1000).repeat().batch(batch_size)
     
 def eval_input_fn(features, labels, batch_size):
-    features=dict(features)
-    inputs = features if labels is None else (features, labels)
-    dataset = tf.data.Dataset.from_tensor_slices(inputs)
-    assert batch_size is not None, "batch_size must not be None"
-    dataset = dataset.batch(batch_size)
-
-    return dataset
+    return tf.data.Dataset.from_tensor_slices((features, labels)).batch(batch_size)
 
 def z_scores(**kwargs):
     fs = kwargs['data']
@@ -291,8 +289,12 @@ def print_scores(**kwargs):
     raw_input()
 
 def run_model(**kwargs):
-    avgs, split, labels, feat = kwargs['team_avgs'], kwargs['split'], kwargs['labels'],\
-                                kwargs['features']
+    avgs, split, labels, feat, ec, t, scs, n, hu, md, ts, ets, bs = kwargs['team_avgs'], kwargs['split'],\
+                                                                kwargs['labels'], kwargs['features'],\
+                                                                kwargs['estimator_config'], 'train',\
+                                                                'saveCheckpointsSteps', 'neurons',\
+                                                                'hiddenUnit', 'modelDir', 'trainSteps'\
+                                                                'evalThrottleSecs', 'batchSize'
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
@@ -307,61 +309,45 @@ def run_model(**kwargs):
     for f in feat:
         feature_cols.append(tf.feature_column.numeric_column(key=f))      
 
-    run_config = tf.estimator.RunConfig(save_checkpoints_steps=100)
+    run_config = tf.estimator.RunConfig(save_checkpoints_steps=ec[t][scs])
     classifier = tf.estimator.Estimator(model_fn=model_fn, 
-                                        params={'feature_columns': feature_cols, 
-                                                                   'hidden_units': [7], 
-                                                                   'num_classes': 2, 
-                                                'shuffle_rate': 2}, 
+                                        params={'feature_columns': feature_cols, 'estimator_config': ec}, 
                                         config=run_config, 
-                                        model_dir='/home/tanderson/git/cfb-predictor/model_out/test_run_' 
-                                        + str(random.randint(0, sys.maxint)))
+                                        model_dir=ec[t][md])
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_features, 
-                                                                        train_labels, BATCH_SIZE), 
-                                        max_steps=TRAIN_STEPS)
+                                                                        train_labels, ec[t][bs]), 
+                                        max_steps=ec[t][ts])
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(test_features, 
-                                                                     test_labels, BATCH_SIZE), 
-                                      throttle_secs=1)
+                                                                     test_labels, ec[t][bs]), 
+                                      throttle_secs=ec[t][ets])
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
-    return {}
-    #return eval_result
-
 def evaluate_model(**kwargs):
-    ec = kwargs['estimator_config']
+    ec, data, sp, dp = kwargs['estimator_config'], 'data', 'splitPercent', 'directoryPattern'
 
-    model_acc = {}
-    for season_dir in glob.glob(ec.data.directory_pattern):
+    for season_dir in glob.glob(ec[data][dp]):
         gs = temp_lib.game_stats(directory=season_dir)
         team_stats = temp_lib.team_game_stats(directory=season_dir)
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)        
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
-        split = stochastic_split_data(game_histo=histo, split_percentage=0.90,
+        split = stochastic_split_data(game_histo=histo, split_percentage=ec[data][sp],
                               histo_count={k: len(histo[k]) for k in histo.keys()})
 
         features = da.normal_dists(field_avgs=input_data(game_averages=avgs, labels=labels)[0])\
                      .keys()
-        eval_result = run_model(team_avgs=avgs, split=split, labels=labels, features=features)
-        eval_result['Split'] = split
-        model_acc[season_dir] = eval_result
+        run_model(team_avgs=avgs, split=split, labels=labels, features=features, estimator_config=ec)
 
-    return model_acc
-
-def write_to_disk(**kwargs):
-    directory, data, file_name = kwargs['directory'], kwargs['data'], kwargs['file_name']
-
-    with open(path.join(directory, file_name), 'wb') as fh:
-        pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
-
-def merge_config_file(**kwargs):
+def read_config(**kwargs):
     ef = kwargs['estimator_file']
 
-    result = estimator_pb2.Estimator()
+    pb = estimator_pb2.Estimator()
+    result = {}
     with open(path.abspath(ef), 'rb') as fh:
         proto_str = fh.read()
-        text_format.Merge(proto_str, result)
+        text_format.Merge(proto_str, pb)
+        result = MessageToDict(pb)
     
     return result
 
@@ -370,9 +356,8 @@ def main(args):
     parser.add_argument('--estimator_config')
     args = parser.parse_args()
 
-    est_config = merge_config_file(estimator_file=args.estimator_config)
-    for layer in est_config.config.hidden_unit:
-        print(layer.neurons)
+    est_config = read_config(estimator_file=args.estimator_config)
+    evaluate_model(estimator_config=est_config['config'])
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)

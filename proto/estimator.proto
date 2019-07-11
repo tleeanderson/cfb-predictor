@@ -21,10 +21,16 @@ message Estimator {
       required int32 batch_size = 5;
       required float learning_rate = 6;
     }
+
+    message DataAugment {
+      required string vector_randomizer_func = 1;
+    }
   
-    required Train train = 1;
-    required Data data = 2;
-    repeated HiddenUnit hidden_unit = 3;
+    required Data data = 1;
+    optional DataAugment data_augment = 2;
+    required Train train = 3;
+    repeated HiddenUnit hidden_unit = 4;
+    
   }
   required Config config = 1;
 }
