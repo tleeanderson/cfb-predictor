@@ -1,0 +1,30 @@
+syntax = "proto2";
+
+package proto;
+
+message Estimator {
+  message Config {
+    message Data {
+      required float split_percent = 1;
+      required string directory_pattern = 2;
+    }
+
+    message HiddenUnit {
+      required int32 neurons = 1;
+    }
+
+    message Train {
+      required int32 save_checkpoints_steps = 1;
+      required string model_dir = 2;
+      required int32 eval_throttle_secs = 3;
+      required int32 train_steps = 4;
+      required int32 batch_size = 5;
+      required float learning_rate = 6;
+    }
+  
+    required Train train = 1;
+    required Data data = 2;
+    repeated HiddenUnit hidden_unit = 3;
+  }
+  required Config config = 1;
+}

@@ -14,6 +14,9 @@ import os.path as path
 import pickle
 import time
 import distribution_analysis as da
+from proto import estimator_pb2
+from google.protobuf import text_format
+import argparse
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -325,10 +328,10 @@ def run_model(**kwargs):
     #return eval_result
 
 def evaluate_model(**kwargs):
-    directory, prefix = kwargs['directory'], kwargs['prefix']
+    ec = kwargs['estimator_config']
 
     model_acc = {}
-    for season_dir in glob.glob(path.join(directory, prefix)):
+    for season_dir in glob.glob(ec.data.directory_pattern):
         gs = temp_lib.game_stats(directory=season_dir)
         team_stats = temp_lib.team_game_stats(directory=season_dir)
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
@@ -352,15 +355,24 @@ def write_to_disk(**kwargs):
     with open(path.join(directory, file_name), 'wb') as fh:
         pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
+def merge_config_file(**kwargs):
+    ef = kwargs['estimator_file']
+
+    result = estimator_pb2.Estimator()
+    with open(path.abspath(ef), 'rb') as fh:
+        proto_str = fh.read()
+        text_format.Merge(proto_str, result)
+    
+    return result
+
 def main(args):
-    data = evaluate_model(directory=args[1], prefix=args[2])
-    if len(args) == 4:        
-        write_to_disk(data=data, file_name=str(int(time.time())) + '.model_eval', 
-                  directory=args[3])
-    elif len(args) == 3:
-        print(data)
-    else:
-        print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
+    parser = argparse.ArgumentParser(description='Predict scores of college football games')
+    parser.add_argument('--estimator_config')
+    args = parser.parse_args()
+
+    est_config = merge_config_file(estimator_file=args.estimator_config)
+    for layer in est_config.config.hidden_unit:
+        print(layer.neurons)
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)
