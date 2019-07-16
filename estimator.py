@@ -18,6 +18,7 @@ from proto import estimator_pb2
 from google.protobuf import text_format
 import argparse
 from google.protobuf.json_format import MessageToDict
+from functools import partial
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -196,7 +197,7 @@ def stochastically_randomize_vector(**kwargs):
     return net
 
 def stochastically_randomize_half_vector(**kwargs):
-    in_net, r, ub = kwargs['net'], kwargs['rate'], kwargs['upper_bound']
+    in_net, r, ub = kwargs['net'], kwargs['rate'], 64
     keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0], 
                          true_fn=lambda: tf.range(0, ub / 2), 
                          false_fn=lambda: tf.range(ub / 2, ub))
@@ -211,46 +212,70 @@ def randomize_vector(**kwargs):
     in_net = kwargs['net']
     return tf.map_fn(lambda gf: tf.random_shuffle(gf), in_net)
 
+RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector, 
+                       'stochastically_randomize_half_vector': stochastically_randomize_half_vector}
+
+ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
+
+REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
+
 def model_fn(features, labels, mode, params):
-    #'hidden_units': map(lambda e: e[n], ec[hu])
-    ec, fc = params['estimator_config'], params['feature_columns']
+    ec, fc, da, rf, r, do, hu, n, reg, act, ty, ol, lr, t = params['estimator_config'], params['feature_columns'], 'dataAugment', 'randomizerFunc', 'rate', 'dropout', 'hiddenUnit', 'neurons', 'regularization', 'activation', 'type', 'outputLayer', 'learningRate', 'train'
+    hidden_units = ec.get(hu)
+    # for k, v in ec.iteritems():
+    #     print(k, v)
+#    print("hidden_units %s" % (str(hidden_units)))
 
     net = tf.feature_column.input_layer(features, params['feature_columns'])
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         ub = len(features)
-        
-        net = tf.reshape(net, [-1, ub])
+
+        if ec.get(da):
+            net = RANDOMIZER.get(ec.get(da).get(rf))(net=net, rate=ec.get(da).get(r))        
+            net = tf.reshape(net, [-1, ub])
 
     tf.summary.histogram('input_layer', net)
-    #net = tf.nn.dropout(net, keep_prob=0.9)
+    if ec.get(do):
+        net = tf.nn.dropout(net, keep_prob=ec.get(do).get(r))
 
-    for units, num in zip(params['hidden_units'], range(len(params['hidden_units']))):
-        # net = tf.layers.dense(net, units=units, activation=None, 
-        #                       kernel_regularizer=tf.contrib.layers.l2_regularizer(0.2))
-        net = tf.layers.dense(net, units=units, activation=None)
+    #hidden layer
+    for unit, num in zip(hidden_units, range(len(hidden_units))):
+        layer_params = {}
+        layer_params.update({'units': unit.get(n)})
+        if unit.get(reg):
+            layer_params.update({'kernel_regularizer': partial(REGULARIZATION.get(unit.get(reg).get(ty)), 
+                                                              unit.get(reg).get(r))})
+        net = tf.layers.dense(net, **layer_params)
+        tf.summary.histogram("weights_%s_%s" % (str(unit.get(n)), str(num)), net)
 
-        tf.summary.histogram("weights_%s_%s" % (str(units), str(num)), net)
+        if unit.get(act):
+            net = ACTIVATION.get(unit.get(act).get(ty))(net, name=unit.get(act).get(ty) + str(unit.get(n)))
+            tf.summary.histogram("activations_%s_%s" % (str(unit.get(n)), str(num)), net)
 
-        net = tf.nn.relu(net, name='ReLU_' + str(units))
-        tf.summary.histogram("activations_%s_%s" % (str(units), str(num)), net)
-    
-    # logits = tf.layers.dense(net, units=params['num_classes'], activation=None, 
-    #                           kernel_regularizer=tf.contrib.layers.l2_regularizer(0.5))
-    logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
-    tf.summary.histogram('logits_' + str(2), logits)
+    #logits
+    output_params = {}
+    output_params.update({'units': ec.get(ol).get(n)})
+    if ec.get(ol).get(reg):
+        output_params.update({'kernel_regularizer': partial(REGULARIZATION.get(ec.get(ol).get(reg).get(ty)), 
+                                                           ec.get(ol).get(reg).get(r))})
+    if ec.get(ol).get(act):
+        output_params.update({'activation': partial(ACTIVATION.get(ec.get(ol).get(act).get(ty)), 
+                           name=ec.get(ol).get(act).get(ty) + str(unit.get(n)))})
+    net = tf.layers.dense(net, **output_params)
 
-    predicted_classes = tf.argmax(logits, 1)
+    tf.summary.histogram('logits_' + str(2), net)
 
+    predicted_classes = tf.argmax(net, 1)
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {
             'class_ids': predicted_classes[:, tf.newaxis],
-            'probabilities': tf.nn.softmax(logits),
-            'logits': logits,
+            'probabilities': tf.nn.softmax(net),
+            'logits': net,
         }
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
     
-    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=net)
     accuracy = tf.metrics.accuracy(labels=labels,
                                    predictions=predicted_classes,
                                    name='acc_op')
@@ -262,7 +287,8 @@ def model_fn(features, labels, mode, params):
     
     assert mode == tf.estimator.ModeKeys.TRAIN
 
-    optimizer = tf.train.AdagradOptimizer(learning_rate=0.1)
+    print("learning_rate %s" % (str(ec.get(t).get(lr))))
+    optimizer = tf.train.AdagradOptimizer(learning_rate=ec.get(t).get(lr))
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
@@ -293,7 +319,7 @@ def run_model(**kwargs):
                                                                 kwargs['labels'], kwargs['features'],\
                                                                 kwargs['estimator_config'], 'train',\
                                                                 'saveCheckpointsSteps', 'neurons',\
-                                                                'hiddenUnit', 'modelDir', 'trainSteps'\
+                                                                'hiddenUnit', 'modelDir', 'trainSteps',\
                                                                 'evalThrottleSecs', 'batchSize'
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 

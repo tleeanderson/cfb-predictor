@@ -9,8 +9,19 @@ message Estimator {
       required string directory_pattern = 2;
     }
 
+    message Regularization {
+      required string type = 1;
+      required float rate = 2;
+    }
+
+    message Activation {
+      required string type = 1;
+    }
+
     message HiddenUnit {
       required int32 neurons = 1;
+      optional Regularization regularization = 2;
+      optional Activation activation = 3;
     }
 
     message Train {
@@ -23,14 +34,20 @@ message Estimator {
     }
 
     message DataAugment {
-      required string vector_randomizer_func = 1;
+      required string randomizer_func = 1;
+      required int32 rate = 2;
+    }
+
+    message Dropout {
+      required float rate = 1;
     }
   
     required Data data = 1;
     optional DataAugment data_augment = 2;
     required Train train = 3;
     repeated HiddenUnit hidden_unit = 4;
-    
+    optional Dropout dropout = 5;
+    required HiddenUnit output_layer = 6;
   }
   required Config config = 1;
 }
