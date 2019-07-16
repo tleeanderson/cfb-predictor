@@ -25,10 +25,6 @@ import re
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
 TRAIN_STEPS = 3000
-RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector, 
-                       'stochastically_randomize_half_vector': stochastically_randomize_half_vector}
-ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
-REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -218,6 +214,11 @@ def randomize_vector(**kwargs):
     in_net = kwargs['net']
     return tf.map_fn(lambda gf: tf.random_shuffle(gf), in_net)
 
+RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector, 
+                       'stochastically_randomize_half_vector': stochastically_randomize_half_vector}
+ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
+REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
+
 def model_fn(features, labels, mode, params):
     ec, fc, da, rf, r, do, hu, n, reg, act, ty, ol, lr, t = params['estimator_config'], params['feature_columns'],\
                                                             'dataAugment', 'randomizerFunc', 'rate', 'dropout',\
@@ -240,11 +241,10 @@ def model_fn(features, labels, mode, params):
     #hidden layer
     for unit, num in zip(hidden_units, range(len(hidden_units))):
         layer_params = {}
-        layer_params.update({'units': unit.get(n)})
         if unit.get(reg):
-            layer_params.update({'kernel_regularizer': partial(REGULARIZATION.get(unit.get(reg).get(ty)), 
-                                                              unit.get(reg).get(r))})
-        net = tf.layers.dense(net, **layer_params)
+            layer_params.update({'kernel_regularizer': REGULARIZATION.get(unit.get(reg).get(ty))(unit.get(reg).get(r))})
+
+        net = tf.layers.dense(net, unit.get(n), **layer_params)
         tf.summary.histogram("weights_%s_%s" % (str(unit.get(n)), str(num)), net)
 
         if unit.get(act):
@@ -253,14 +253,12 @@ def model_fn(features, labels, mode, params):
 
     #logits
     output_params = {}
-    output_params.update({'units': ec.get(ol).get(n)})
     if ec.get(ol).get(reg):
-        output_params.update({'kernel_regularizer': partial(REGULARIZATION.get(ec.get(ol).get(reg).get(ty)), 
-                                                           ec.get(ol).get(reg).get(r))})
+        output_params.update({'kernel_regularizer': REGULARIZATION.get(ec.get(ol).get(reg).get(ty))(ec.get(ol).get(reg).get(r))})
     if ec.get(ol).get(act):
-        output_params.update({'activation': partial(ACTIVATION.get(ec.get(ol).get(act).get(ty)), 
-                           name=ec.get(ol).get(act).get(ty) + str(unit.get(n)))})
-    net = tf.layers.dense(net, **output_params)
+        output_params.update({'activation': ACTIVATION.get(ec.get(ol).get(act).get(ty))(name=ec.get(ol).get(act).get(ty) 
+                                                                                        + str(unit.get(n)))})
+    net = tf.layers.dense(net, ec.get(ol).get(n), **output_params)
 
     tf.summary.histogram('logits_' + str(2), net)
 
@@ -379,17 +377,20 @@ def read_config(**kwargs):
 
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
-    parser.add_argument('--estimator_config')
+    parser.add_argument('--estimator_configs', nargs='+', required=True, help='List of model configs')
     args = parser.parse_args() 
-    conf_file, c = path.basename(args.estimator_config), 'config'
+    conf_files, c = map(lambda f: path.basename(f), args.estimator_configs), 'config'
     dc = '.' + c
-      
-    if conf_file.endswith(dc):
-        est_config = read_config(estimator_file=args.estimator_config)
-        est_config.get(c).update({'modelSubDir': conf_file.replace(dc, '')})
-        evaluate_model(estimator_config=est_config[c])
+  
+    valid_files = filter(lambda f: f.endswith(dc), args.estimator_configs)
+    if not valid_files:
+        print("--estimator_configs each file must end with %s to be processed" % (str(dc)))
     else:
-        print("--estimator_config must end with %s" % (str(dc)))
+        for vf in valid_files:
+            est_config = read_config(estimator_file=vf)
+            bvf = path.basename(vf)
+            est_config.get(c).update({'modelSubDir': bvf.replace(dc, '')})
+            evaluate_model(estimator_config=est_config[c])
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)
