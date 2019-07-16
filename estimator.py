@@ -19,6 +19,8 @@ from google.protobuf import text_format
 import argparse
 from google.protobuf.json_format import MessageToDict
 from functools import partial
+from os import listdir
+import re
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -220,12 +222,11 @@ ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmo
 REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
 
 def model_fn(features, labels, mode, params):
-    ec, fc, da, rf, r, do, hu, n, reg, act, ty, ol, lr, t = params['estimator_config'], params['feature_columns'], 'dataAugment', 'randomizerFunc', 'rate', 'dropout', 'hiddenUnit', 'neurons', 'regularization', 'activation', 'type', 'outputLayer', 'learningRate', 'train'
+    ec, fc, da, rf, r, do, hu, n, reg, act, ty, ol, lr, t = params['estimator_config'], params['feature_columns'],\
+                                                            'dataAugment', 'randomizerFunc', 'rate', 'dropout',\
+                                                            'hiddenUnit', 'neurons', 'regularization', 'activation',\
+                                                            'type', 'outputLayer', 'learningRate', 'train'
     hidden_units = ec.get(hu)
-    # for k, v in ec.iteritems():
-    #     print(k, v)
-#    print("hidden_units %s" % (str(hidden_units)))
-
     net = tf.feature_column.input_layer(features, params['feature_columns'])
 
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -287,7 +288,6 @@ def model_fn(features, labels, mode, params):
     
     assert mode == tf.estimator.ModeKeys.TRAIN
 
-    print("learning_rate %s" % (str(ec.get(t).get(lr))))
     optimizer = tf.train.AdagradOptimizer(learning_rate=ec.get(t).get(lr))
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
@@ -315,12 +315,12 @@ def print_scores(**kwargs):
     raw_input()
 
 def run_model(**kwargs):
-    avgs, split, labels, feat, ec, t, scs, n, hu, md, ts, ets, bs = kwargs['team_avgs'], kwargs['split'],\
+    avgs, split, labels, feat, ec, t, scs, n, hu, md, ts, ets, bs, rd = kwargs['team_avgs'], kwargs['split'],\
                                                                 kwargs['labels'], kwargs['features'],\
                                                                 kwargs['estimator_config'], 'train',\
                                                                 'saveCheckpointsSteps', 'neurons',\
                                                                 'hiddenUnit', 'modelDir', 'trainSteps',\
-                                                                'evalThrottleSecs', 'batchSize'
+                                                                'evalThrottleSecs', 'batchSize', 'runDir'
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
@@ -339,7 +339,8 @@ def run_model(**kwargs):
     classifier = tf.estimator.Estimator(model_fn=model_fn, 
                                         params={'feature_columns': feature_cols, 'estimator_config': ec}, 
                                         config=run_config, 
-                                        model_dir=ec[t][md])
+                                        model_dir=path.join(ec[t][md], "%s_%s" % (str(ec[rd]), 
+                                                                                  str(random.randint(0, sys.maxint)))))
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_features, 
                                                                         train_labels, ec[t][bs]), 
                                         max_steps=ec[t][ts])
@@ -349,7 +350,8 @@ def run_model(**kwargs):
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
 def evaluate_model(**kwargs):
-    ec, data, sp, dp = kwargs['estimator_config'], 'data', 'splitPercent', 'directoryPattern'
+    ec, data, sp, dp, msd, rd = kwargs['estimator_config'], 'data', 'splitPercent', 'directoryPattern', 'modelSubDir',\
+                                'runDir'
 
     for season_dir in glob.glob(ec[data][dp]):
         gs = temp_lib.game_stats(directory=season_dir)
@@ -363,6 +365,7 @@ def evaluate_model(**kwargs):
 
         features = da.normal_dists(field_avgs=input_data(game_averages=avgs, labels=labels)[0])\
                      .keys()
+        ec.update({rd: "%s_%s" % (ec.get(msd), path.basename(season_dir))})
         run_model(team_avgs=avgs, split=split, labels=labels, features=features, estimator_config=ec)
 
 def read_config(**kwargs):
@@ -380,10 +383,16 @@ def read_config(**kwargs):
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
     parser.add_argument('--estimator_config')
-    args = parser.parse_args()
-
-    est_config = read_config(estimator_file=args.estimator_config)
-    evaluate_model(estimator_config=est_config['config'])
+    args = parser.parse_args() 
+    conf_file, c = path.basename(args.estimator_config), 'config'
+    dc = '.' + c
+      
+    if conf_file.endswith(dc):
+        est_config = read_config(estimator_file=args.estimator_config)
+        est_config.get(c).update({'modelSubDir': conf_file.replace(dc, '')})
+        evaluate_model(estimator_config=est_config[c])
+    else:
+        print("--estimator_config must end with %s" % (str(dc)))
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)
