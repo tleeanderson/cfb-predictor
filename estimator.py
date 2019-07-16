@@ -25,6 +25,10 @@ import re
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
 TRAIN_STEPS = 3000
+RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector, 
+                       'stochastically_randomize_half_vector': stochastically_randomize_half_vector}
+ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
+REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
 
 def loop_through(**kwargs):
     data = kwargs['data']
@@ -213,13 +217,6 @@ def stochastically_randomize_half_vector(**kwargs):
 def randomize_vector(**kwargs):
     in_net = kwargs['net']
     return tf.map_fn(lambda gf: tf.random_shuffle(gf), in_net)
-
-RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector, 
-                       'stochastically_randomize_half_vector': stochastically_randomize_half_vector}
-
-ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
-
-REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
 
 def model_fn(features, labels, mode, params):
     ec, fc, da, rf, r, do, hu, n, reg, act, ty, ol, lr, t = params['estimator_config'], params['feature_columns'],\
