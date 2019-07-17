@@ -21,6 +21,7 @@ from google.protobuf.json_format import MessageToDict
 from functools import partial
 from os import listdir
 import re
+import time
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -315,7 +316,7 @@ def run_model(**kwargs):
                                                                 kwargs['estimator_config'], 'train',\
                                                                 'saveCheckpointsSteps', 'neurons',\
                                                                 'hiddenUnit', 'modelDir', 'trainSteps',\
-                                                                'evalThrottleSecs', 'batchSize', 'runDir'
+                                                                'evalThrottleSecs', 'batchSize', 'run_dir'
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
@@ -344,24 +345,14 @@ def run_model(**kwargs):
                                       throttle_secs=ec[t][ets])
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
-def evaluate_model(**kwargs):
-    ec, data, sp, dp, msd, rd = kwargs['estimator_config'], 'data', 'splitPercent', 'directoryPattern', 'modelSubDir',\
-                                'runDir'
+def season_dirs(**kwargs):
+    cs, d, dp = kwargs['configs'], 'data', 'directoryPattern'
+    
+    result = {}
+    for c in cs:
+        result[c[0]] = glob.glob(c[1].get(d).get(dp))
 
-    for season_dir in glob.glob(ec[data][dp]):
-        gs = temp_lib.game_stats(directory=season_dir)
-        team_stats = temp_lib.team_game_stats(directory=season_dir)
-        avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
-        team_stats = {k: team_stats[k] for k in avgs.keys()}        
-        labels = tgs.add_labels(team_game_stats=team_stats)        
-        histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')            
-        split = stochastic_split_data(game_histo=histo, split_percentage=ec[data][sp],
-                              histo_count={k: len(histo[k]) for k in histo.keys()})
-
-        features = da.normal_dists(field_avgs=input_data(game_averages=avgs, labels=labels)[0])\
-                     .keys()
-        ec.update({rd: "%s_%s" % (ec.get(msd), path.basename(season_dir))})
-        run_model(team_avgs=avgs, split=split, labels=labels, features=features, estimator_config=ec)
+    return result, set(reduce(lambda f1,f2: f1 + f2, result.values()))
 
 def read_config(**kwargs):
     ef = kwargs['estimator_file']
@@ -375,22 +366,59 @@ def read_config(**kwargs):
     
     return result
 
+def season_data(**kwargs):
+    ds = kwargs['dirs']
+
+    result = {}
+    for season_dir in ds:
+        gs = temp_lib.game_stats(directory=season_dir)
+        team_stats = temp_lib.team_game_stats(directory=season_dir)
+        avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
+        team_stats = {k: team_stats[k] for k in avgs.keys()}        
+        labels = tgs.add_labels(team_game_stats=team_stats)        
+        histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')   
+        features = da.normal_dists(field_avgs=input_data(game_averages=avgs, labels=labels)[0]).keys()
+
+        result.update({season_dir: {'features': features, 'labels': labels, 'team_avgs': avgs, 
+                                    'game_stats': gs, 'team_stats': team_stats, 'histo': histo}})
+
+    return result
+
+def evaluate_models(**kwargs):
+    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
+                                                   kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
+                                                   'team_avgs', 'labels', 'features', 'model_sub_dir'
+
+    for f in fcs:
+        ec, dirs = f
+        for d in dirs:
+            sea_data = asd[d]
+            ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
+            split = stochastic_split_data(game_histo=sea_data[h], split_percentage=ec[dk][sp],
+                                               histo_count={k: len(sea_data[h][k]) for k in sea_data[h].keys()})
+            run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], estimator_config=ec)
+
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
     parser.add_argument('--estimator_configs', nargs='+', required=True, help='List of model configs')
     args = parser.parse_args() 
-    conf_files, c = map(lambda f: path.basename(f), args.estimator_configs), 'config'
-    dc = '.' + c
+    conf_files, cf = map(lambda f: path.basename(f), args.estimator_configs), 'config'
+    dc = '.' + cf
   
     valid_files = filter(lambda f: f.endswith(dc), args.estimator_configs)
     if not valid_files:
         print("--estimator_configs each file must end with %s to be processed" % (str(dc)))
     else:
-        for vf in valid_files:
-            est_config = read_config(estimator_file=vf)
-            bvf = path.basename(vf)
-            est_config.get(c).update({'modelSubDir': bvf.replace(dc, '')})
-            evaluate_model(estimator_config=est_config[c])
+        file_configs = map(lambda f: (f, path.basename(f).replace(dc, ''), read_config(estimator_file=f)), valid_files)
+        for fc in file_configs:
+            fc[-1].get(cf).update({'model_sub_dir': fc[1]})
+
+        sea_dirs, all_dirs = season_dirs(configs=map(lambda c: (c[0], c[-1][cf]), file_configs))
+        print("Reading in data from disk from these directories: %s" % (str(all_dirs)))
+        sea_data = season_data(dirs=all_dirs)
+        print("Done reading data from disk")
+        evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs), sea_dirs=sea_dirs, 
+                        all_sea_data=sea_data)
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)
