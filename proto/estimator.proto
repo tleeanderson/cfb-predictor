@@ -11,14 +11,14 @@ message Estimator {
 
     message Regularization {
       required string type = 1;
-      required float rate = 2;
+      required float scale = 2;
     }
 
     message Activation {
       required string type = 1;
     }
 
-    message HiddenUnit {
+    message HiddenLayer {
       required int32 neurons = 1;
       optional Regularization regularization = 2;
       optional Activation activation = 3;
@@ -45,9 +45,9 @@ message Estimator {
     required Data data = 1;
     optional DataAugment data_augment = 2;
     required Train train = 3;
-    repeated HiddenUnit hidden_unit = 4;
+    repeated HiddenLayer hidden_layer = 4;
     optional Dropout dropout = 5;
-    required HiddenUnit output_layer = 6;
+    required HiddenLayer output_layer = 6;
   }
   required Config config = 1;
 }

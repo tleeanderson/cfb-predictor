@@ -22,23 +22,11 @@ from functools import partial
 from os import listdir
 import re
 import time
+import uuid
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
 TRAIN_STEPS = 3000
-
-def loop_through(**kwargs):
-    data = kwargs['data']
-
-    for k, v in data.iteritems():
-        print("k " + str(k))
-        #print("v " + str(v))
-        # for tid, stat in v.iteritems():
-        #     print("tid " + str(tid))
-        #     print("stat len " + str(len(stat)))
-        print("len(v) " + str(len(v)))
-        #print("keys of v " + str(v.keys()))
-        #raw_input()
 
 def averages(**kwargs):
     team_game_stats, game_infos, skip_fields = kwargs['team_game_stats'], kwargs['game_infos'],\
@@ -221,11 +209,11 @@ ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmo
 REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
 
 def model_fn(features, labels, mode, params):
-    ec, fc, da, rf, r, do, hu, n, reg, act, ty, ol, lr, t = params['estimator_config'], params['feature_columns'],\
+    ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc = params['estimator_config'], params['feature_columns'],\
                                                             'dataAugment', 'randomizerFunc', 'rate', 'dropout',\
-                                                            'hiddenUnit', 'neurons', 'regularization', 'activation',\
-                                                            'type', 'outputLayer', 'learningRate', 'train'
-    hidden_units = ec.get(hu)
+                                                            'hiddenLayer', 'neurons', 'regularization', 'activation',\
+                                                            'type', 'outputLayer', 'learningRate', 'train', 'scale'
+    hidden_layers = ec.get(hl)
     net = tf.feature_column.input_layer(features, params['feature_columns'])
 
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -240,10 +228,10 @@ def model_fn(features, labels, mode, params):
         net = tf.nn.dropout(net, keep_prob=ec.get(do).get(r))
 
     #hidden layer
-    for unit, num in zip(hidden_units, range(len(hidden_units))):
+    for unit, num in zip(hidden_layers, range(len(hidden_layers))):
         layer_params = {}
         if unit.get(reg):
-            layer_params.update({'kernel_regularizer': REGULARIZATION.get(unit.get(reg).get(ty))(unit.get(reg).get(r))})
+            layer_params.update({'kernel_regularizer': REGULARIZATION.get(unit.get(reg).get(ty))(unit.get(reg).get(sc))})
 
         net = tf.layers.dense(net, unit.get(n), **layer_params)
         tf.summary.histogram("weights_%s_%s" % (str(unit.get(n)), str(num)), net)
@@ -255,10 +243,9 @@ def model_fn(features, labels, mode, params):
     #logits
     output_params = {}
     if ec.get(ol).get(reg):
-        output_params.update({'kernel_regularizer': REGULARIZATION.get(ec.get(ol).get(reg).get(ty))(ec.get(ol).get(reg).get(r))})
+        output_params.update({'kernel_regularizer': REGULARIZATION.get(ec.get(ol).get(reg).get(ty))(ec.get(ol).get(reg).get(sc))})
     if ec.get(ol).get(act):
-        output_params.update({'activation': ACTIVATION.get(ec.get(ol).get(act).get(ty))(name=ec.get(ol).get(act).get(ty) 
-                                                                                        + str(unit.get(n)))})
+        output_params.update({'activation': ACTIVATION.get(ec.get(ol).get(act).get(ty))})
     net = tf.layers.dense(net, ec.get(ol).get(n), **output_params)
 
     tf.summary.histogram('logits_' + str(2), net)
@@ -311,11 +298,11 @@ def print_scores(**kwargs):
     raw_input()
 
 def run_model(**kwargs):
-    avgs, split, labels, feat, ec, t, scs, n, hu, md, ts, ets, bs, rd = kwargs['team_avgs'], kwargs['split'],\
+    avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd = kwargs['team_avgs'], kwargs['split'],\
                                                                 kwargs['labels'], kwargs['features'],\
                                                                 kwargs['estimator_config'], 'train',\
                                                                 'saveCheckpointsSteps', 'neurons',\
-                                                                'hiddenUnit', 'modelDir', 'trainSteps',\
+                                                                'hiddenLayer', 'modelDir', 'trainSteps',\
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir'
 
     train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
@@ -336,7 +323,7 @@ def run_model(**kwargs):
                                         params={'feature_columns': feature_cols, 'estimator_config': ec}, 
                                         config=run_config, 
                                         model_dir=path.join(ec[t][md], "%s_%s" % (str(ec[rd]), 
-                                                                                  str(random.randint(0, sys.maxint)))))
+                                                                                  str(uuid.uuid1()))))
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_features, 
                                                                         train_labels, ec[t][bs]), 
                                         max_steps=ec[t][ts])
