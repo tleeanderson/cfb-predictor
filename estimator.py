@@ -200,7 +200,7 @@ def stochastically_randomize_vector(**kwargs):
     return net
 
 def stochastically_randomize_half_vector(**kwargs):
-    in_net, r, ub = kwargs['net'], kwargs['rate'], 64
+    in_net, r, ub = kwargs['net'], kwargs['rate'], kwargs['ub']
     keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0], 
                          true_fn=lambda: tf.range(0, ub / 2), 
                          false_fn=lambda: tf.range(ub / 2, ub))
@@ -232,7 +232,7 @@ def model_fn(features, labels, mode, params):
         ub = len(features)
 
         if ec.get(da):
-            net = RANDOMIZER.get(ec.get(da).get(rf))(net=net, rate=ec.get(da).get(r))        
+            net = RANDOMIZER.get(ec.get(da).get(rf))(net=net, rate=ec.get(da).get(r), ub=ub)        
             net = tf.reshape(net, [-1, ub])
 
     tf.summary.histogram('input_layer', net)
