@@ -333,16 +333,12 @@ def run_model(**kwargs):
                                                                 'hiddenLayer', 'modelDir', 'trainSteps',\
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir'
 
-    # train_features, train_labels = binary_classification_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
-    #                                           labels=labels)
     train_features, train_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
 
     train_features = z_scores(data=train_features)
     train_features = {tf: train_features[tf] for tf in feat}
 
-    # test_features, test_labels = binary_classification_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
-    #                                         labels=labels)
     test_features, test_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
                                             labels=labels)
 
@@ -400,7 +396,6 @@ def season_data(**kwargs):
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')   
-        #features = da.normal_dists(field_avgs=binary_classification_data(game_averages=avgs, labels=labels)[0]).keys()
         features = da.normal_dists(field_avgs=regression_data(game_averages=avgs, labels=labels)[0]).keys()
 
         result.update({season_dir: {'features': features, 'labels': labels, 'team_avgs': avgs, 
