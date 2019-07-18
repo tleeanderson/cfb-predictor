@@ -49,7 +49,9 @@ def add_labels(**kwargs):
         for team_id, game_stats in teams.iteritems():
             points.append((game_stats['Points'], team_id))
         team_game_stats[game_id]['Winner'] = {'Team Code': max(points)[1], 
-                                              'Total Points': sum(map(lambda t: t[0], points))}
+                                              'Total Points': sum(map(lambda t: t[0], points)), 
+                                              points[0][1]: points[0][0], 
+                                              points[-1][1]: points[-1][0]}
     return team_game_stats
 
 def win_loss_pct(**kwargs):

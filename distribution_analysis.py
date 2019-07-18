@@ -89,10 +89,25 @@ def normal_dists(**kwargs):
     
     return norms
 
+def z_scores_args(**kwargs):
+    data, mean, stddev = kwargs['data'], kwargs['mean'], kwargs['stddev']
+    
+    return map(lambda d: (d - mean) / stddev, data)
+
+# def z_scores(**kwargs):
+#     data = kwargs['data']
+
+#     avg = np.average(data)
+#     stddev = np.std(data)
+
+#     return map(lambda d: (d - avg) / stddev, data)
+
 def z_scores(**kwargs):
     data = kwargs['data']
 
-    avg = np.average(data)
-    stddev = np.std(data)
+    return z_scores_args(**{'data': data, 'mean': np.average(data), 'stddev': np.std(data)})
 
-    return map(lambda d: (d - avg) / stddev, data)
+def reverse_zscores(**kwargs):
+    data, mean, stddev = kwargs['data'], kwargs['mean'], kwargs['stddev']
+    
+    return map(lambda v: v * stddev + mean, data)

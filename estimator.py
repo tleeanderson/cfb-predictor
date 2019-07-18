@@ -44,7 +44,7 @@ def averages(**kwargs):
         
     return game_avgs
 
-def input_data(**kwargs):
+def binary_classification_data(**kwargs):
     game_avgs, input_labels = kwargs['game_averages'], kwargs['labels']
 
     features = {}
@@ -64,6 +64,31 @@ def input_data(**kwargs):
         features[k] = np.array(features[k])
 
     return features, np.array(labels)
+
+def regression_data(**kwargs):
+    game_avgs, input_labels, ps, w = kwargs['game_averages'], kwargs['labels'], 'Points', 'Winner'
+
+    features = {}
+    labels = []
+    for gid, team_avgs in game_avgs.iteritems():
+        for ta, feature_team_id in zip(team_avgs.iteritems(), ['-0', '-1']):
+            tid, stats = ta
+            for name, value in stats.iteritems():
+                stat_key = TF_FEATURE_NAME(name + feature_team_id)
+                if stat_key not in features:
+                    features[stat_key] = []
+                features[stat_key].append(value)
+        labels.append(map(lambda tk: input_labels[gid][w][tk], team_avgs.keys()))
+
+    for k in features.keys():
+        features[k] = np.array(features[k])
+
+    flat = reduce(lambda l1,l2: l1 + l2, labels)
+    zs = da.z_scores(data=flat)
+    inds = [i for i in zip(range(0, len(flat) - 1, 2), range(1, len(flat), 2))]
+    scores = map(lambda i: [zs[i[0]], zs[i[-1]]], inds)
+
+    return features, np.array(scores)
 
 def histogram_games(**kwargs):
     game_infos, game_stats, histo_key = kwargs['game_infos'], kwargs['game_stats'], kwargs['histo_key']
@@ -259,6 +284,9 @@ def model_fn(features, labels, mode, params):
         }
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
     
+    print("labels shape: %s, net shape: %s" % (str(labels.shape), str(net.shape)))
+    exit(1)
+
     loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=net)
     accuracy = tf.metrics.accuracy(labels=labels,
                                    predictions=predicted_classes,
@@ -305,12 +333,20 @@ def run_model(**kwargs):
                                                                 'hiddenLayer', 'modelDir', 'trainSteps',\
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir'
 
-    train_features, train_labels = input_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
+    # train_features, train_labels = binary_classification_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
+    #                                           labels=labels)
+    train_features, train_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                               labels=labels)
+
     train_features = z_scores(data=train_features)
     train_features = {tf: train_features[tf] for tf in feat}
-    test_features, test_labels = input_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
+
+    # test_features, test_labels = binary_classification_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
+    #                                         labels=labels)
+    test_features, test_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
                                             labels=labels)
+
+
     test_features = z_scores(data=test_features)
     test_features = {tf: test_features[tf] for tf in feat}
 
@@ -362,9 +398,10 @@ def season_data(**kwargs):
         team_stats = temp_lib.team_game_stats(directory=season_dir)
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
-        labels = tgs.add_labels(team_game_stats=team_stats)        
+        labels = tgs.add_labels(team_game_stats=team_stats)
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')   
-        features = da.normal_dists(field_avgs=input_data(game_averages=avgs, labels=labels)[0]).keys()
+        #features = da.normal_dists(field_avgs=binary_classification_data(game_averages=avgs, labels=labels)[0]).keys()
+        features = da.normal_dists(field_avgs=regression_data(game_averages=avgs, labels=labels)[0]).keys()
 
         result.update({season_dir: {'features': features, 'labels': labels, 'team_avgs': avgs, 
                                     'game_stats': gs, 'team_stats': team_stats, 'histo': histo}})
