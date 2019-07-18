@@ -233,6 +233,13 @@ RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector
 ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
 REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
 
+def team_points_distance_loss(**kwargs):
+    labels, logits = kwargs['labels'], kwargs['logits']
+
+    return tf.math.reduce_mean(tf.map_fn(lambda i: tf.reduce_sum(tf.math.abs(
+        tf.math.subtract(tf.gather(logits, i), tf.gather(labels, i)))), 
+                                         tf.range(tf.shape(logits)[0]), dtype=tf.float32))
+
 def model_fn(features, labels, mode, params):
     ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc = params['estimator_config'], params['feature_columns'],\
                                                             'dataAugment', 'randomizerFunc', 'rate', 'dropout',\
@@ -284,24 +291,32 @@ def model_fn(features, labels, mode, params):
         }
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
     
-    print("labels shape: %s, net shape: %s" % (str(labels.shape), str(net.shape)))
-    exit(1)
+    #print("labels shape: %s, net shape: %s" % (str(labels.shape), str(net.shape)))
+    #loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=net)
 
-    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=net)
-    accuracy = tf.metrics.accuracy(labels=labels,
-                                   predictions=predicted_classes,
-                                   name='acc_op')
 
-    tf.summary.scalar('accuracy', accuracy[1])
+    loss = team_points_distance_loss(labels=tf.dtypes.cast(labels, tf.float32), logits=net)
+
+    # accuracy = tf.metrics.accuracy(labels=labels,
+    #                                predictions=predicted_classes,
+    #                                name='acc_op')
+
+    #tf.summary.scalar('accuracy', accuracy[1])
 
     if mode == tf.estimator.ModeKeys.EVAL:
-        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops={'accuracy': accuracy})
+        return tf.estimator.EstimatorSpec(mode, loss=loss)
+        #return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops={'accuracy': accuracy})
     
     assert mode == tf.estimator.ModeKeys.TRAIN
 
     optimizer = tf.train.AdagradOptimizer(learning_rate=ec.get(t).get(lr))
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
+
+def loss(**kwargs):
+    labels, logits = kwargs['labels'], kwargs['logits']
+
+    
 
 def train_input_fn(features, labels, batch_size):
     return tf.data.Dataset.from_tensor_slices((dict(features), labels))\
