@@ -7,6 +7,7 @@ message Estimator {
     message Data {
       required float split_percent = 1;
       required string directory_pattern = 2;
+      required string split_function = 3;
     }
 
     message Regularization {
@@ -48,6 +49,7 @@ message Estimator {
     repeated HiddenLayer hidden_layer = 4;
     optional Dropout dropout = 5;
     required HiddenLayer output_layer = 6;
+    required int32 runs_per_season = 7;
   }
   required Config config = 1;
 }

@@ -232,6 +232,7 @@ RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector
                        'stochastically_randomize_half_vector': stochastically_randomize_half_vector}
 ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
 REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
+SPLIT_FUNCTION = {'stochastic': stochastic_split_data, 'static': static_split_data}
 
 def team_points_distance_loss(**kwargs):
     labels, logits = kwargs['labels'], kwargs['logits']
@@ -406,18 +407,21 @@ def season_data(**kwargs):
     return result
 
 def evaluate_models(**kwargs):
-    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
+    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
                                                    kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
-                                                   'team_avgs', 'labels', 'features', 'model_sub_dir'
+                                                   'team_avgs', 'labels', 'features', 'model_sub_dir', 'splitFunction',\
+                                                   'runsPerSeason'
 
     for f in fcs:
         ec, dirs = f
         for d in dirs:
             sea_data = asd[d]
             ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
-            split = stochastic_split_data(game_histo=sea_data[h], split_percentage=ec[dk][sp],
+            split = SPLIT_FUNCTION[ec[dk][sf]](game_histo=sea_data[h], split_percentage=ec[dk][sp],
                                                histo_count={k: len(sea_data[h][k]) for k in sea_data[h].keys()})
-            run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], estimator_config=ec)
+            for i in range(ec[rps]):
+                run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], 
+                          estimator_config=ec)
 
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
