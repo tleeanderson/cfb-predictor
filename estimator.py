@@ -240,21 +240,6 @@ def team_points_distance_loss(**kwargs):
         tf.math.subtract(tf.gather(logits, i), tf.gather(labels, i)))), 
                                          tf.range(tf.shape(logits)[0]), dtype=tf.float32))
 
-def win_loss_accuracy(**kwargs):
-    labels, logits = kwargs['labels'], kwargs['logits']
-
-    total = tf.get_variable('total', initializer=tf.constant(0))
-    correct = tf.get_variable('correct', initializer=tf.constant(0))
-    
-    num_logits = tf.shape(logits)[0]
-    total = tf.assign_add(total, num_logits)
-
-    correct = tf.assign_add(correct, tf.size(tf.where(tf.map_fn(lambda i: tf.equal(tf.argmax(tf.gather(logits, i)), 
-                                                      tf.argmax(tf.gather(labels, i))), 
-                                                      tf.range(num_logits), dtype=tf.bool))))
-
-    return tf.math.divide(correct, total), tf.constant(1.0)
-
 def model_fn(features, labels, mode, params):
     ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc = params['estimator_config'], params['feature_columns'],\
                                                             'dataAugment', 'randomizerFunc', 'rate', 'dropout',\
@@ -297,24 +282,22 @@ def model_fn(features, labels, mode, params):
 
     tf.summary.histogram('logits_' + str(2), net)
 
-    predicted_classes = tf.argmax(net, 1)
+    predicted_winners = tf.argmax(net, 1)
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {
-            'class_ids': predicted_classes[:, tf.newaxis],
-            'probabilities': tf.nn.softmax(net),
+            'class_ids': predicted_winners[:, tf.newaxis],
+            'probabilities': net,
             'logits': net,
         }
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
     
-    #print("labels shape: %s, net shape: %s" % (str(labels.shape), str(net.shape)))
     loss = team_points_distance_loss(labels=tf.dtypes.cast(labels, tf.float32), logits=net)
-
-    accuracy = win_loss_accuracy(labels=labels, logits=net)
-    tf.summary.scalar('win/loss accuracy', accuracy[0])
+    accuracy = tf.metrics.accuracy(tf.argmax(labels, 1), predicted_winners)
+    wl_acc = 'win loss accuracy'
+    tf.summary.scalar(wl_acc, accuracy[1])
 
     if mode == tf.estimator.ModeKeys.EVAL:
-        #return tf.estimator.EstimatorSpec(mode, loss=loss)
-        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops={'accuracy': accuracy})
+        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops={wl_acc: accuracy})
     
     assert mode == tf.estimator.ModeKeys.TRAIN
 
