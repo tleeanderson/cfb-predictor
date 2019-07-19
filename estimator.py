@@ -240,6 +240,21 @@ def team_points_distance_loss(**kwargs):
         tf.math.subtract(tf.gather(logits, i), tf.gather(labels, i)))), 
                                          tf.range(tf.shape(logits)[0]), dtype=tf.float32))
 
+def win_loss_accuracy(**kwargs):
+    labels, logits = kwargs['labels'], kwargs['logits']
+
+    total = tf.get_variable('total', initializer=tf.constant(0))
+    correct = tf.get_variable('correct', initializer=tf.constant(0))
+    
+    num_logits = tf.shape(logits)[0]
+    total = tf.assign_add(total, num_logits)
+
+    correct = tf.assign_add(correct, tf.size(tf.where(tf.map_fn(lambda i: tf.equal(tf.argmax(tf.gather(logits, i)), 
+                                                      tf.argmax(tf.gather(labels, i))), 
+                                                      tf.range(num_logits), dtype=tf.bool))))
+
+    return tf.math.divide(correct, total)
+
 def model_fn(features, labels, mode, params):
     ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc = params['estimator_config'], params['feature_columns'],\
                                                             'dataAugment', 'randomizerFunc', 'rate', 'dropout',\
@@ -292,16 +307,10 @@ def model_fn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
     
     #print("labels shape: %s, net shape: %s" % (str(labels.shape), str(net.shape)))
-    #loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=net)
-
-
     loss = team_points_distance_loss(labels=tf.dtypes.cast(labels, tf.float32), logits=net)
 
-    # accuracy = tf.metrics.accuracy(labels=labels,
-    #                                predictions=predicted_classes,
-    #                                name='acc_op')
-
-    #tf.summary.scalar('accuracy', accuracy[1])
+    accuracy = win_loss_accuracy(labels=labels, logits=net)
+    tf.summary.scalar('win/loss accuracy', accuracy)
 
     if mode == tf.estimator.ModeKeys.EVAL:
         return tf.estimator.EstimatorSpec(mode, loss=loss)
@@ -312,11 +321,6 @@ def model_fn(features, labels, mode, params):
     optimizer = tf.train.AdagradOptimizer(learning_rate=ec.get(t).get(lr))
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
-
-def loss(**kwargs):
-    labels, logits = kwargs['labels'], kwargs['logits']
-
-    
 
 def train_input_fn(features, labels, batch_size):
     return tf.data.Dataset.from_tensor_slices((dict(features), labels))\
