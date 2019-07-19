@@ -253,7 +253,7 @@ def win_loss_accuracy(**kwargs):
                                                       tf.argmax(tf.gather(labels, i))), 
                                                       tf.range(num_logits), dtype=tf.bool))))
 
-    return tf.math.divide(correct, total)
+    return tf.math.divide(correct, total), tf.constant(1.0)
 
 def model_fn(features, labels, mode, params):
     ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc = params['estimator_config'], params['feature_columns'],\
@@ -310,11 +310,11 @@ def model_fn(features, labels, mode, params):
     loss = team_points_distance_loss(labels=tf.dtypes.cast(labels, tf.float32), logits=net)
 
     accuracy = win_loss_accuracy(labels=labels, logits=net)
-    tf.summary.scalar('win/loss accuracy', accuracy)
+    tf.summary.scalar('win/loss accuracy', accuracy[0])
 
     if mode == tf.estimator.ModeKeys.EVAL:
-        return tf.estimator.EstimatorSpec(mode, loss=loss)
-        #return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops={'accuracy': accuracy})
+        #return tf.estimator.EstimatorSpec(mode, loss=loss)
+        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops={'accuracy': accuracy})
     
     assert mode == tf.estimator.ModeKeys.TRAIN
 
