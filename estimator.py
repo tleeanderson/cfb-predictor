@@ -27,6 +27,7 @@ import uuid
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
 TRAIN_STEPS = 3000
+DATA_CACHE_DIR = 'data_cache'
 
 def averages(**kwargs):
     team_game_stats, game_infos, skip_fields = kwargs['team_game_stats'], kwargs['game_infos'],\
@@ -228,24 +229,41 @@ def randomize_vector(**kwargs):
     in_net = kwargs['net']
     return tf.map_fn(lambda gf: tf.random_shuffle(gf), in_net)
 
+def mean_power_error(**kwargs):
+    labels, logits, p, w = kwargs['labels'], kwargs['logits'], kwargs['power'], kwargs['weight']
+
+    return tf.math.reduce_mean(tf.map_fn(lambda i: tf.math.multiply(tf.math.pow(tf.math.abs(
+        tf.math.subtract(tf.gather(logits, i), tf.gather(labels, i))), p), w), 
+                                         tf.range(tf.shape(logits)[0]), dtype=tf.float32))
+
+def mean_piecewise_power_error(**kwargs):
+    labels, logits, pa, a, p = kwargs['labels'], kwargs['logits'], kwargs['power_alpha'], kwargs['alpha'], kwargs['power']
+
+    return tf.math.reduce_mean(tf.map_fn(lambda i: 
+                                        tf.reduce_sum(tf.map_fn(lambda s: tf.cond(tf.math.less(s, a), 
+                                        true_fn=lambda: tf.math.pow(s, pa), false_fn=lambda: tf.math.pow(s, p)), 
+                                        tf.math.abs(tf.math.subtract(tf.gather(logits, i), 
+                                        tf.gather(labels, i))))), tf.range(tf.shape(logits)[0]), dtype=tf.float32))
+
+def mean_absolute_error(**kwargs):
+    labels, logits = kwargs['labels'], kwargs['logits']
+
+    return mean_power_error(labels=labels, logits=logits, power=1.0, weight=1.0)
+
 RANDOMIZER = {'stochastically_randomize_vector': stochastically_randomize_vector, 
                        'stochastically_randomize_half_vector': stochastically_randomize_half_vector}
 ACTIVATION = {'relu': tf.nn.relu, 'relu6': tf.nn.relu6, 'sigmoid': tf.math.sigmoid, 'leaky_relu': tf.nn.leaky_relu}
 REGULARIZATION = {'l2': tf.contrib.layers.l2_regularizer, 'l1': tf.contrib.layers.l1_regularizer}
 SPLIT_FUNCTION = {'stochastic': stochastic_split_data, 'static': static_split_data}
-
-def team_points_distance_loss(**kwargs):
-    labels, logits = kwargs['labels'], kwargs['logits']
-
-    return tf.math.reduce_mean(tf.map_fn(lambda i: tf.reduce_sum(tf.math.abs(
-        tf.math.subtract(tf.gather(logits, i), tf.gather(labels, i)))), 
-                                         tf.range(tf.shape(logits)[0]), dtype=tf.float32))
+LOSS_FUNCTION = {'mean_power_error': mean_power_error, 'mean_absolute_error': mean_absolute_error, 
+                 'mean_piecewise_power_error': mean_piecewise_power_error}
 
 def model_fn(features, labels, mode, params):
-    ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc = params['estimator_config'], params['feature_columns'],\
-                                                            'dataAugment', 'randomizerFunc', 'rate', 'dropout',\
-                                                            'hiddenLayer', 'neurons', 'regularization', 'activation',\
-                                                            'type', 'outputLayer', 'learningRate', 'train', 'scale'
+    ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc, lf, p, pa, a, w = params['estimator_config'],\
+                                                            params['feature_columns'], 'dataAugment', 'randomizerFunc',\
+                                                            'rate', 'dropout', 'hiddenLayer', 'neurons', 'regularization',\
+                                                            'activation', 'type', 'outputLayer', 'learningRate', 'train',\
+                                                            'scale', 'lossFunction', 'power', 'powerAlpha', 'alpha', 'weight'
     hidden_layers = ec.get(hl)
     net = tf.feature_column.input_layer(features, params['feature_columns'])
 
@@ -292,7 +310,8 @@ def model_fn(features, labels, mode, params):
         }
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
     
-    loss = team_points_distance_loss(labels=tf.dtypes.cast(labels, tf.float32), logits=net)
+    loss = LOSS_FUNCTION[ec[lf][ty]](labels=tf.dtypes.cast(labels, tf.float32), logits=net, power=ec[lf].get(p), 
+                                     power_alpha=ec[lf].get(pa), alpha=ec[lf].get(a), weight=ec[lf].get(w))
     accuracy = tf.metrics.accuracy(tf.argmax(labels, 1), predicted_winners)
     wl_acc = 'win loss accuracy'
     tf.summary.scalar(wl_acc, accuracy[1])
@@ -427,7 +446,7 @@ def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
     parser.add_argument('--estimator_configs', nargs='+', required=True, help='List of model configs')
     args = parser.parse_args() 
-    conf_files, cf = map(lambda f: path.basename(f), args.estimator_configs), 'config'
+    cf = 'config'
     dc = '.' + cf
   
     valid_files = filter(lambda f: f.endswith(dc), args.estimator_configs)

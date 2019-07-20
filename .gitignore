@@ -4,3 +4,4 @@ accuracy_analysis
 *.test.sh
 model_out
 *_pb2.py
+data_cache
