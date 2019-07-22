@@ -10,8 +10,8 @@ import random
 from random import randint
 import tensorflow as tf
 import glob
+import os
 import os.path as path
-import pickle
 import time
 import distribution_analysis as da
 from proto import estimator_pb2
@@ -19,10 +19,8 @@ from google.protobuf import text_format
 import argparse
 from google.protobuf.json_format import MessageToDict
 from functools import partial
-from os import listdir
-import re
-import time
 import uuid
+import pickle
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -240,10 +238,10 @@ def mean_piecewise_power_error(**kwargs):
     labels, logits, pa, a, p = kwargs['labels'], kwargs['logits'], kwargs['power_alpha'], kwargs['alpha'], kwargs['power']
 
     return tf.math.reduce_mean(tf.map_fn(lambda i: 
-                                        tf.reduce_sum(tf.map_fn(lambda s: tf.cond(tf.math.less(s, a), 
+                                        tf.map_fn(lambda s: tf.cond(tf.math.less(s, a), 
                                         true_fn=lambda: tf.math.pow(s, pa), false_fn=lambda: tf.math.pow(s, p)), 
                                         tf.math.abs(tf.math.subtract(tf.gather(logits, i), 
-                                        tf.gather(labels, i))))), tf.range(tf.shape(logits)[0]), dtype=tf.float32))
+                                        tf.gather(labels, i)))), tf.range(tf.shape(logits)[0]), dtype=tf.float32))
 
 def mean_absolute_error(**kwargs):
     labels, logits = kwargs['labels'], kwargs['logits']
@@ -425,6 +423,36 @@ def season_data(**kwargs):
 
     return result
 
+def write_to_cache(**kwargs):
+    cd, data = kwargs['cache_dir'], kwargs['data']
+
+    for sea, d in data.iteritems():
+        with open(path.join(path.abspath(cd), path.basename(sea)), 'wb') as fh:
+            pickle.dump(d, fh)
+
+def read_from_cache(**kwargs):
+    cd, context = kwargs['cache_dir'], kwargs['context_dir']
+
+    result = {}
+    for sea in glob.glob(path.join(path.abspath(cd), '*')):
+        with open(sea, 'rb') as fh:
+            entry = path.join(context, path.basename(sea))
+            result[entry] = pickle.load(fh)
+            
+    return result
+
+def model_data(**kwargs):
+    cd, ds, crf, cwf = kwargs['cache_dir'], kwargs['dirs'], kwargs['cache_read_func'], kwargs['cache_write_func']
+
+    if not path.exists(cd):
+        os.mkdir(cd)
+    cache = crf(cache_dir=cd, context_dir=path.dirname(list(ds)[0]))
+    compute_seasons = set(ds).difference(set(cache.keys()))
+    data = season_data(dirs=compute_seasons)
+    cwf(cache_dir=cd, data=data)
+
+    return {k: data[k] if k in data else cache[k] for k in set(cache.keys()).union(set(data.keys()))}
+
 def evaluate_models(**kwargs):
     fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
                                                    kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
@@ -459,7 +487,8 @@ def main(args):
 
         sea_dirs, all_dirs = season_dirs(configs=map(lambda c: (c[0], c[-1][cf]), file_configs))
         print("Reading in data from disk from these directories: %s" % (str(all_dirs)))
-        sea_data = season_data(dirs=all_dirs)
+        sea_data = model_data(cache_dir=DATA_CACHE_DIR, dirs=all_dirs, cache_read_func=read_from_cache, 
+                              cache_write_func=write_to_cache)
         print("Done reading data from disk")
         evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs), sea_dirs=sea_dirs, 
                         all_sea_data=sea_data)

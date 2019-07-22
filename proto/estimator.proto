@@ -48,7 +48,7 @@ message Estimator {
       optional float power = 2;
       optional float alpha = 3;
       optional float power_alpha = 4;
-      required float weight = 5;
+      optional float weight = 5;
     }
   
     required Data data = 1;
