@@ -28,7 +28,7 @@ def test_normality_filter():
                                          norm + '-0', norm + '-1'
     nn_dist, norm_dist = np.random.lognormal(0, 2, 1000), np.random.normal(0, 1, 1000)
 
-    #test opting in of fields whose corresponding field falls below threshoold
+    #test opting in of fields whose corresponding field falls below threshold
     in_data = {nn_field0: nn_dist, nn_field1: nn_dist, norm1: norm_dist, norm0: nn_dist}
     sw = da.shapiro_wilk(distributions=in_data)
     out = da.normality_filter(shapiro_wilk=sw, threshold=0.98)
@@ -36,3 +36,13 @@ def test_normality_filter():
     assert len(out) == 2
     for entry in out.iteritems():
         assert norm in entry[0]
+
+def test_z_scores():
+    mean, stddev, nv = 0, 1, 10000
+    data = list(np.random.normal(mean, stddev, nv))
+
+    out_zsa = da.reverse_zscores(data=da.z_scores_args(data=data, mean=mean, stddev=stddev), 
+                             mean=mean, stddev=stddev)
+    
+    assert list(out_zsa) == data
+    
