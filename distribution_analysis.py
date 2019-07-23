@@ -63,12 +63,10 @@ def normality_filter(**kwargs):
     
     result = {}
     for f, val in filter(lambda i: '-0' in i[0], set(sw.iteritems())):
-        if val[0] >= th:
+        sf = similar_field(field=f, all_fields=filter(lambda k: '-1' in k, set(sw.keys())))
+        if sf and (sw[sf][0] >= th or val[0] >= th):
             result[f] = val
-            sf = similar_field(field=f, all_fields=filter(lambda k: '-1' in k, set(sw.keys())))
-            if sf:
-                result[sf] = sw[sf]
-    
+            result[sf] = sw[sf]    
     return result
 
 def normal_dists(**kwargs):
