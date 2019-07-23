@@ -19,6 +19,7 @@ def reorder(**kwargs):
     fs = kwargs['features']
 
     res = []
+    no_match = []
     for field in filter(lambda x: '-0' in x, set(fs.keys())):
         lis = filter(lambda e: e[0 : len(e) - 2] == field[0 : len(field) - 2], 
                      filter(lambda x: '-1' in x, set(fs.keys())))
@@ -26,16 +27,16 @@ def reorder(**kwargs):
             res.append((field, fs[field]))
             res.append((lis[0], fs[lis[0]]))
         else:
-            print("Could not find match for field %s, lis %s" % (str(field), str(lis)))
+            no_match.append(field)
 
-    return res
+    return res, no_match
 
 def histogram(**kwargs):
     avgs, team_stats = kwargs['avgs'], kwargs['team_stats']
 
     fields, _ = est.input_data(game_averages=avgs, labels=tgs.add_labels(team_game_stats=team_stats))
 
-    data = reorder(features=fields)
+    data, _ = reorder(features=fields)
 
     for i in range(1, len(data), 2):
         plt.figure(num=i)
@@ -55,12 +56,6 @@ def shapiro_wilk(**kwargs):
         result[k] = shapiro(d)
     
     return result
-
-def print_shapiro_wilk(**kwargs):
-    sw, keys = kwargs['shapiro_wilk'], kwargs['keys']
-
-    for k in keys:
-        print("Field: %s, statistic: %s, p-value: %s" % (str(k), str(sw[k][0]), str(sw[k][1])))
 
 def similar_field(**kwargs):
     f, afs = kwargs['field'], kwargs['all_fields']
@@ -93,14 +88,6 @@ def z_scores_args(**kwargs):
     data, mean, stddev = kwargs['data'], kwargs['mean'], kwargs['stddev']
     
     return map(lambda d: (d - mean) / stddev, data)
-
-# def z_scores(**kwargs):
-#     data = kwargs['data']
-
-#     avg = np.average(data)
-#     stddev = np.std(data)
-
-#     return map(lambda d: (d - avg) / stddev, data)
 
 def z_scores(**kwargs):
     data = kwargs['data']

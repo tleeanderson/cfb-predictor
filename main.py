@@ -9,17 +9,7 @@ import glob
 import sys
 from dateutil import parser as du
 import matplotlib.pyplot as plt
-
-def loop_through(**kwargs):
-    data = kwargs['data']
-
-    for k, v in data.iteritems():
-        print("k " + str(k))
-        print("v " + str(v))
-        # for attr, av in v.iteritems():
-        #     print("attr: %s av: %s" % (str(attr), str(av)))
-        #print("len(v) " + str(len(v)))
-        raw_input() 
+import argparse
 
 def team_game_stats(**kwargs):
     input_directory = kwargs['directory']
@@ -40,18 +30,15 @@ def game_stats(**kwargs):
     return game_data
 
 def evaluate_model(**kwargs):
-    directory, prefix, no_pred, model_fn = kwargs['directory'], kwargs['prefix'], 'no_pred',\
+    directory, dir_suffix, no_pred, model_fn = kwargs['directory'], kwargs['dir_suffix'], 'no_pred',\
                                           kwargs['model_fn']
     
     result = {}
-    for data_dir in glob.glob(path.join(directory, prefix)):
+    for data_dir in glob.glob(path.join(directory, dir_suffix)):
         stats = team_game_stats(directory=data_dir)
         game_data = game_stats(directory=data_dir)
-
         preds = model.predict_all(team_game_stats=stats, game_infos=game_data, no_pred_key=no_pred)
         stats_labels = tgs.add_labels(team_game_stats=stats)
-
-
         result[data_dir] = model_fn(tg_stats=stats_labels,
                                           predictions=preds,
                                           game_info=game_data, 
@@ -93,29 +80,30 @@ def histogram_by_date(**kwargs):
         plt.bar(ticks, map(lambda d: d[1], day_accs), align='center', alpha=0.5)
         plt.xticks(ticks, map(lambda d: d[0], day_accs))
         plt.ylabel('Accuracy')
-        plt.title(s + ' Accuracy by Day')
+        plt.title(s + ' Accuracy by Date')
     plt.show()
 
 def main(args):
-    if len(args) == 4:
-        #read in data
-        input_directory, prefix, abd = args[1], args[2], args[3]
-        if abd == '--run-abd':
-            print("Histograming accuracy by date")
-            acc_by_date = evaluate_model(directory=input_directory, prefix=args[2], 
-                                               model_fn=model.accuracy_by_date)
-            filt_abd = {}
-            for s, s_acc in acc_by_date.iteritems():
-                filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, hi_total=10)
+    parser = argparse.ArgumentParser(description='Run static analysis on the cfb dataset')
+    parser.add_argument('--input-directory', required=True, help='Top level directory of data')
+    parser.add_argument('--dir-suffix', required=True, help='')
+    parser.add_argument('--accuracy-by-date', required=False, action='store_true', 
+                        help='Histograms the predictions of the model by date')
+    args = parser.parse_args()
 
-            histogram_by_date(acc_by_date=filt_abd)
-        else:
-            print("Calculating accuracy by season")
-            acc = evaluate_model(directory=input_directory, prefix=args[2], 
-                                       model_fn=model.accuracy)
-            print_summary(acc=acc)
+    if args.accuracy_by_date:
+        print("Histograming accuracy by date")
+        acc_by_date = evaluate_model(directory=args.input_directory, dir_suffix=args.dir_suffix, 
+                                           model_fn=model.accuracy_by_date)
+        filt_abd = {}
+        for s, s_acc in acc_by_date.iteritems():
+            filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, hi_total=10)
+
+        histogram_by_date(acc_by_date=filt_abd)
     else:
-        print("usage: ./%s [top_level_dir] [data_dir_prefix]" % (sys.argv[0]))
+        print("Calculating accuracy by season")
+        acc = evaluate_model(directory=args.input_directory, dir_suffix=args.dir_suffix, model_fn=model.accuracy)
+        print_summary(acc=acc)
 
 if __name__ == '__main__':
     main(sys.argv)
