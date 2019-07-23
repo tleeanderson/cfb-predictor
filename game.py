@@ -1,6 +1,5 @@
 import utilities as util
 from dateutil import parser as du
-import operator as op
 
 #functions for reading in data from game.csv
 

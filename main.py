@@ -3,7 +3,6 @@ import utilities as util
 import team_game_statistics as tgs
 import os.path as path
 import game
-import operator as op
 import model
 import glob
 import sys

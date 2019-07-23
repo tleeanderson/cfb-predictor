@@ -1,9 +1,7 @@
 import main as temp_lib
-import sys
 import model
 import team_game_statistics as tgs
 import numpy as np
-import copy
 from dateutil import parser as du
 import math
 import random
@@ -12,13 +10,11 @@ import tensorflow as tf
 import glob
 import os
 import os.path as path
-import time
 import distribution_analysis as da
 from proto import estimator_pb2
 from google.protobuf import text_format
 import argparse
 from google.protobuf.json_format import MessageToDict
-from functools import partial
 import uuid
 import pickle
 

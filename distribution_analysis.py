@@ -1,11 +1,6 @@
 import matplotlib.pyplot as plt
-import main as temp_lib
 import estimator as est
-import model
 import team_game_statistics as tgs
-import sys
-import glob
-import os.path as path
 from scipy.stats import shapiro
 import numpy as np
 

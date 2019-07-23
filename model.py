@@ -176,12 +176,4 @@ def filter_by_total(**kwargs):
     abd, hi = kwargs['acc_by_date'], kwargs['hi_total']
 
     return {d: abd[d] for d in filter(lambda d: abd[d]['total'] > hi, abd)}
-
-def print_list():
-        #     lis = list(accuracy_by_date.iteritems())
-        # lis.sort(key=lambda x: du.parse(x[0]))
-        # for date in lis:
-        #     print(date)
-        # raw_input()
-    pass
         
