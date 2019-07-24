@@ -6,6 +6,14 @@ from dateutil import parser as du
 FILE_NAME = 'game.csv'
 
 def csv_to_map(**kwargs):
+    """For a given list of maps in csv_reader, maps a game code id to 
+       each map with the game code id removed from each map
+
+    Args:
+         csv_reader: list of maps
+    
+    Returns: map of game code ids to values
+    """
     csv_reader = kwargs['csv_reader']
     result = {}
 
@@ -16,6 +24,15 @@ def csv_to_map(**kwargs):
     return result
 
 def seasons_by_game_code(**kwargs):
+    """Given a game_code_id and map of games, returns the games of
+       teams that are in game_code_id
+
+    Args:
+         game_code_id: a game id
+         games: map of game ids to their values
+    
+    Returns: map of team ids to their games
+    """
     game_code_id, games = kwargs['game_code_id'], kwargs['games']
     visit_team, home_team = 'Visit Team Code', 'Home Team Code'
 
@@ -33,6 +50,19 @@ def seasons_by_game_code(**kwargs):
     return games_by_team
 
 def subseason(**kwargs):
+    """Returns a subset of the games in team_games according to
+       a game_code_id and comparison operator
+
+    Args:
+         team_games: map of team id to its games, which is also a map
+         game_code_id: game id to base comparison off of
+         compare: comparison operator (e.g. op.lt, op.gt etc.)
+    
+    Returns: list of tuples
+
+    Raises:
+           ValueError: if game_code_id is not in team_games
+    """
     team_games, game_code_id, compare, date = kwargs['team_games'], kwargs['game_code_id'],\
                                               kwargs['compare'], 'Date'
     
