@@ -7,6 +7,13 @@ import copy
 FILE_NAME = 'team-game-statistics.csv'
 
 def csv_to_map(**kwargs):
+    """Given a list of values, converts each value to a map
+
+    Args:
+         csv_reader: a list of values
+    
+    Returns: map of game ids to a map of team ids and their game stats
+    """
     csv_reader = kwargs['csv_reader']
 
     result = {}
@@ -21,6 +28,14 @@ def csv_to_map(**kwargs):
     return result
 
 def alter_types(**kwargs):
+    """Applies a type_mapper function over the values of a game_map
+
+    Args:
+         game_map: map of game ids to their stat values
+         type_mapper: function to map each team's stats for a given game
+    
+    Returns: a map of game ids to their values
+    """
     game_map, type_mapper = kwargs['game_map'], kwargs['type_mapper']
     result = {}
 
@@ -31,6 +46,15 @@ def alter_types(**kwargs):
     return result
 
 def type_mapper(**kwargs):
+    """Casts the values of a given map to either int or float. The 
+       first type that produces a successful cast is the resulting
+       type of the value
+
+    Args:
+         team_stats: map of stats to values for a given game
+    
+    Returns: a map
+    """
     team_stats = kwargs['team_stats']
     result = {}
 
@@ -40,6 +64,15 @@ def type_mapper(**kwargs):
     return result
 
 def add_labels(**kwargs):
+    """Adds a winning key to each game in team_game_stats, where the 
+       value has the winning team, total points, and points per team
+
+    Args:
+         team_game_stats: map of game ids to the statistics by each 
+                          team for that game
+    
+    Returns: a map
+    """
     team_game_stats = copy.deepcopy(kwargs['team_game_stats'])
     
     for game_id, teams in team_game_stats.iteritems():  
@@ -53,6 +86,15 @@ def add_labels(**kwargs):
     return team_game_stats
 
 def win_loss_pct(**kwargs):
+    """Computes winning percentage for a given team across a
+       given number of games
+
+    Args:
+         tid1: team id
+         games: games in which tid1 is a participant
+    
+    Returns: winning percentage
+    """
     tid1, games, ps = kwargs['tid1'], kwargs['games'], 'Points'
 
     result = {}
@@ -66,6 +108,15 @@ def win_loss_pct(**kwargs):
     return result
 
 def averages(**kwargs):
+    """Computes averages of all statistics in the game_stats map for a 
+       given set of team_ids
+
+    Args:
+         game_stats: map of game ids to their statistics by team id
+         team_ids: set of team_ids to compute averages
+    
+    Returns: map of averages by team id
+    """
     game_stats, team_ids = kwargs['game_stats'], kwargs['team_ids']
 
     avgs = {}
