@@ -8,18 +8,16 @@ FILE_NAME = 'team-game-statistics.csv'
 
 def csv_to_map(**kwargs):
     csv_reader = kwargs['csv_reader']
-    result = {}
 
+    result = {}
     for row in csv_reader:
         game_code_key, team_code_key = 'Game Code', 'Team Code'
         game_code_id, team_code_id = row[game_code_key], row[team_code_key]
         team_game_stats = util.subset_of_map(full_map=row, 
                                              take_out_keys={game_code_key, team_code_key})
-        if game_code_id in result:
-            result[game_code_id][team_code_id] = team_game_stats
-        else:
+        if game_code_id not in result:
             result[game_code_id] = {}
-            result[game_code_id][team_code_id] = team_game_stats
+        result[game_code_id][team_code_id] = team_game_stats
     return result
 
 def alter_types(**kwargs):

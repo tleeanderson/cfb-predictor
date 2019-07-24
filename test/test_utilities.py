@@ -19,14 +19,9 @@ def test_convert_type():
     types, bad_val, good_val = (int, float), 'f', '1'
 
     out = util.convert_type(types=types, value=good_val)
-
+    bad_out = util.convert_type(types=types, value=bad_val)
     assert(out == 1)
-    try:
-        util.convert_type(types=types, value=bad_val)
-    except ValueError:
-        assert(True)
-    else:
-        assert(False)
+    assert(bad_out == bad_val)
 
 def test_subset_of_map():
     in_data, take_out = {i: i for i in range(10)}, {i for i in range(5)}

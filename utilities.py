@@ -21,7 +21,7 @@ def read_file(**kwargs):
     return result
 
 def convert_type(**kwargs):
-    """Converts a value to a given type, returns value error 
+    """Casts a value to a given type, returns value
        if unsuccessful
 
     Args:
@@ -30,10 +30,6 @@ def convert_type(**kwargs):
         value: a value
     
     Returns: value
-    
-    Raises: 
-           ValueError: if value cannot be casted to one of
-                       the given types
     """
     types, value = kwargs['types'], kwargs['value']
 
@@ -42,7 +38,7 @@ def convert_type(**kwargs):
             return t(value)
         except ValueError:
             pass
-    raise ValueError("Could not convert %s" % (value))
+    return value
 
 def subset_of_map(**kwargs):
     """Given a map and a set of keys, returns a map with the 
