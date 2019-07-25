@@ -1,5 +1,5 @@
 import model
-import test.utilities as tu
+import constants as const
 
 def test_attr_compare():
     v1, v2 = 1, 2
@@ -35,7 +35,7 @@ def test_evaluation():
 
 def test_predict():
     tid_1, tid_2, ef, ps, v1, v2, w, t = '5', '6', model.evaluation, 'Points', 5, 6,\
-                                      tu.WINNER, 'tie'
+                                      const.WINNER, 'tie'
     ta = {tid_1: {ps: v1}, tid_2: {ps: v2}}
 
     out = model.predict(team_avgs=ta, game_code_id='1', tg_stats={}, eval_func=ef)
@@ -53,7 +53,7 @@ def test_predict():
         assert(False)
 
 def test_team_avgs():
-    visit_team, home_team, v_tid, h_tid, gid = tu.VISIT_TEAM_CODE, tu.HOME_TEAM_CODE, '12', '22', str(9)
+    visit_team, home_team, v_tid, h_tid, gid = const.VISIT_TEAM_CODE, const.HOME_TEAM_CODE, '12', '22', str(9)
     sep, octo, nov, d, ps, v1, v2 = '09/01/2005', '10/01/2005', '11/01/2005', 'Date', 'Points', 2, 3
     gid_2, gid_3, gid_4, gid_5 = '2', '3', '4', '5'
 
@@ -77,7 +77,7 @@ def test_predict_all():
                                                        'Points', 5, 10, 'Date'
     sep, octo, nov, npk = '09/01/2005', '10/01/2005', '11/01/2005', 'no_pred'
 
-    visit_team, home_team, w = tu.VISIT_TEAM_CODE, tu.HOME_TEAM_CODE, tu.WINNER
+    visit_team, home_team, w = const.VISIT_TEAM_CODE, const.HOME_TEAM_CODE, const.WINNER
     tgs = {gid_1: {tid_1: {ps: v1}, tid_2: {ps: v2}}, 
            gid_2: {tid_1: {ps: v1}, tid_2: {ps: v2}}, 
            gid_3: {tid_1: {ps: v1}, tid_2: {ps: v2}}}
@@ -93,8 +93,8 @@ def test_predict_all():
     assert(tid_2 == out[gid_2][w])
 
 def test_accuracy():
-    ck, ik, tk, ak, w, tc, tie = 'correct', 'incorr', 'total', 'accuracy', tu.WINNER,\
-                                 tu.TEAM_CODE, 'tie'
+    ck, ik, tk, ak, w, tc, tie = 'correct', 'incorr', 'total', 'accuracy', const.WINNER,\
+                                 const.TEAM_CODE, 'tie'
     gid_1, gid_2, gid_3, gid_4, tid_1, tid_2 = 'gid1', 'gid2', 'gid3', 'gid4', 'tid1', 'tid2'
 
     tgs = {gid_1: {w: {tc: tid_1}}, 
@@ -113,10 +113,10 @@ def test_accuracy():
 
 def test_accuracy_by_date():
     ck, ik, tk, ak, w, tc, tie, d, sep, octo, nov = 'correct', 'incorr', 'total', 'accuracy',\
-                                                    tu.WINNER, tu.TEAM_CODE, 'tie', 'Date',\
+                                                    const.WINNER, const.TEAM_CODE, 'tie', 'Date',\
                                                     '09/01/2005', '10/01/2005', '11/01/2005'
     gid_1, gid_2, gid_3, gid_4, gid_5, gid_6, tid_1, tid_2 = 'gid1', 'gid2', 'gid3', 'gid4', 'gid5', 'gid6', 'tid1', 'tid2'
-    visit_team, home_team = tu.VISIT_TEAM_CODE, tu.HOME_TEAM_CODE
+    visit_team, home_team = const.VISIT_TEAM_CODE, const.HOME_TEAM_CODE
 
     tgs = {gid_1: {w: {tc: tid_1}}, 
            gid_2: {w: {tc: tid_2}}, 
