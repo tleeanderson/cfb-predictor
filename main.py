@@ -10,24 +10,6 @@ from dateutil import parser as du
 import matplotlib.pyplot as plt
 import argparse
 
-def team_game_stats(**kwargs):
-    input_directory = kwargs['directory']
-
-    tgs_file = path.join(input_directory, tgs.FILE_NAME)
-    team_game_stats = util.read_file(input_file=tgs_file, func=tgs.csv_to_map)
-    converted_tgs = tgs.alter_types(type_mapper=tgs.type_mapper, 
-                                    game_map=team_game_stats)
-    
-    return converted_tgs
-
-def game_stats(**kwargs):
-    input_directory = kwargs['directory']
-
-    game_file = path.join(input_directory, game.FILE_NAME)
-    game_data = util.read_file(input_file=game_file, func=game.csv_to_map)
-    
-    return game_data
-
 def evaluate_model(**kwargs):
     directory, dir_suffix, no_pred, model_fn = kwargs['directory'], kwargs['dir_suffix'], 'no_pred',\
                                           kwargs['model_fn']

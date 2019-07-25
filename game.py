@@ -1,5 +1,6 @@
 import utilities as util
 from dateutil import parser as du
+import os.path as path
 
 #functions for reading in data from game.csv
 
@@ -72,4 +73,19 @@ def subseason(**kwargs):
         return filter(lambda x: compare(x[-1], du.parse(team_games[game_code_id][date])), lis)
     else:
         raise ValueError("%s id was not in %s" % (str(game_code_id), str(team_games)))
+
+def game_stats(**kwargs):
+    """Reads in data from a game.csv file
+
+    Args:
+         directory: directory containing a game.csv file
+    
+    Returns: a map of game data
+    """
+    input_directory = kwargs['directory']
+
+    game_file = path.join(input_directory, FILE_NAME)
+    game_data = util.read_file(input_file=game_file, func=csv_to_map)
+    
+    return game_data
     

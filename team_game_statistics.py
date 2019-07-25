@@ -1,6 +1,7 @@
 import utilities as util
 import operator as op
 import copy
+import os.path as path
 
 #functions for reading in data from team_game_statistics.csv
 
@@ -133,3 +134,21 @@ def averages(**kwargs):
                                                          default=float(len(game_stats.keys()))), 
                                     merge_op=op.div)
     return avgs
+
+def team_game_stats(**kwargs):
+    """Reads in data from a team-game-statistics.csv file
+
+    Args:
+         directory: directory containing a team-game-statistics.csv 
+                    file
+    
+    Returns: a map of data of each game by teams
+    """
+    input_directory = kwargs['directory']
+
+    tgs_file = path.join(input_directory, FILE_NAME)
+    team_game_stats = util.read_file(input_file=tgs_file, func=csv_to_map)
+    converted_tgs = alter_types(type_mapper=type_mapper, 
+                                    game_map=team_game_stats)
+    
+    return converted_tgs

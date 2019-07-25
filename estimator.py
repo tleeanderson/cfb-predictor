@@ -1,4 +1,3 @@
-import main as temp_lib
 import model
 import team_game_statistics as tgs
 import numpy as np
@@ -17,6 +16,7 @@ import argparse
 from google.protobuf.json_format import MessageToDict
 import uuid
 import pickle
+import game
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -406,8 +406,8 @@ def season_data(**kwargs):
 
     result = {}
     for season_dir in ds:
-        gs = temp_lib.game_stats(directory=season_dir)
-        team_stats = temp_lib.team_game_stats(directory=season_dir)
+        gs = game.game_stats(directory=season_dir)
+        team_stats = tgs.team_game_stats(directory=season_dir)
         avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)
