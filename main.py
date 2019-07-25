@@ -96,7 +96,7 @@ def main(args):
                                            model_fn=model.accuracy_by_date)
         filt_abd = {}
         for s, s_acc in acc_by_date.iteritems():
-            filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, hi_total=10)
+            filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, lowest_val=10)
 
         histogram_by_date(acc_by_date=filt_abd)
     else:

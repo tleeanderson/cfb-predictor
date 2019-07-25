@@ -32,6 +32,16 @@ LEFTOVER_MIN = set(['Fumble Lost', 'Penalty Yard', 'Kickoff Out-Of-Bounds'])
 FIELD_WIN_SEMANTICS = {CURRENT_MAX: MAX_COMPARE, CURRENT_MIN: MIN_COMPARE}
 
 def attr_compare(**kwargs):
+    """Compares two values and returns the index of the value in the 
+       argument list.
+
+    Args:
+         v1: a value
+         v2: a value
+         compare: a function to compare v1 and v2
+    
+    Returns: index
+    """
     v1, v2, compare = kwargs['v1'], kwargs['v2'], kwargs['compare']
     if v1 == v2:
         return 'tie'
@@ -39,6 +49,20 @@ def attr_compare(**kwargs):
         return ([v1] + [v2]).index(compare(v1, v2))
 
 def evaluation(**kwargs):
+    """Evalutes two maps of statistics by comparing the alike fields according
+       to field_win. The field that wins adds one to the total score of its
+       associated map. A tie does not affect the score for either map.
+
+    Args:
+         stat_map1: map of stats
+         st1_key: key to use in the output of stat_map1's score
+         stat_map2: map of stats
+         st2_key: key to use in the output of stat_map2's score
+         field_win: map of tuples of fields to comparison function
+         undec_fields: fields to be skipped
+    
+    Returns: map of scores
+    """
     stat_map1, st1_key, stat_map2, st2_key, field_win, undec_fields, c1, c2 = kwargs['stat_map1'],\
                                                                              kwargs['st1_key'],\
                                                                              kwargs['stat_map2'],\
@@ -66,8 +90,16 @@ def evaluation(**kwargs):
     return {st1_key: c1, st2_key: c2, 'tie': c1 == c2}
 
 def predict(**kwargs):
-    team_avgs, game_code_id, tg_stats, eval_func = kwargs['team_avgs'], kwargs['game_code_id'],\
-                                                   kwargs['tg_stats'], kwargs['eval_func']
+    """Predicts the winner between two maps of fields to their averages
+
+    Args:
+         team_avgs: the averaged data points for two teams
+         eval_func: evaluation function to compare the team_avgs
+                    maps
+    
+    Returns: prediction map
+    """
+    team_avgs, eval_func = kwargs['team_avgs'], kwargs['eval_func']
 
     keys = team_avgs.keys()
     if len(keys) == 2:
@@ -83,6 +115,16 @@ def predict(**kwargs):
     
 
 def team_avgs(**kwargs):
+    """Computes the averages for all fields for two teams in a given game
+
+    Args:
+         game_code_id: game which serves as the basis for 
+                       the computation of averages
+         game_data: home, away etc. information for a game, see game.csv
+         tg_stats: stats of all games by teams, see team-game-statistics.csv
+    
+    Returns: map of averaged data points for all fields for two teams
+    """
     game_code_id, game_data, tg_stats = kwargs['game_code_id'], kwargs['game_data'], kwargs['tg_stats']
 
     games_by_team = game.seasons_by_game_code(games=game_data, 
@@ -92,12 +134,19 @@ def team_avgs(**kwargs):
         gb = game.subseason(team_games=games, game_code_id=game_code_id, 
                            compare=op.lt)
         games_to_avg = {gid: tg_stats[gid] for gid in map(lambda g: g[0], gb)}
-        avgs.update(tgs.averages(game_stats=games_to_avg, team_ids={tid}))        
-        if len(gb) > 0:
-            avgs[tid]['Win Loss Percentage'] = tgs.win_loss_pct(tid1=tid, games=games_to_avg)        
+        avgs.update(tgs.averages(game_stats=games_to_avg, team_ids={tid}))            
     return avgs
 
 def predict_all(**kwargs):
+    """Runs predictions across all games in team_game_stats. See predict().
+
+    Args:
+         team_game_stats: stats of all games by teams, see team-game-statistics.csv
+         game_infos: home, away etc. information for a game, see game.csv
+         no_pred_key: key to use to associate games that cannot be predicted
+    
+    Returns: predictions
+    """
     team_game_stats, game_infos, no_pred, no_pred_key = kwargs['team_game_stats'], kwargs['game_infos'],\
                                                         set(), kwargs['no_pred_key']
 
@@ -105,17 +154,27 @@ def predict_all(**kwargs):
     for gid in team_game_stats.keys():
         ta = team_avgs(game_code_id=gid, game_data=game_infos, tg_stats=team_game_stats)
         if len(ta) == 2:
-            preds[gid] = predict(team_avgs=ta, game_code_id=gid, tg_stats=team_game_stats, 
-                                 eval_func=evaluation)
-        else:            
-            if no_pred_key in preds:
-                preds[no_pred_key].append(gid)
-            else:
+            preds[gid] = predict(team_avgs=ta, eval_func=evaluation)
+        else:
+            if no_pred_key not in preds:
                 preds[no_pred_key] = []
-
+            preds[no_pred_key].append(gid)
     return preds
 
 def accuracy(**kwargs):
+    """Computes accuracy of a given predictions map.
+
+    Args:
+         tg_stats: stats of all games by teams, see team-game-statistics.csv
+         predictions: map of game ids to predicted outcome
+         correct_key: key to use for correct results
+         incorrect_key: key to use for incorrect results
+         total_key: key to use for total results
+         skip_keys: keys to skip in computing accuracy
+         acc_key: key to use for accuracy results
+    
+    Returns: map of accuracy of predictions
+    """
     tg_stats, predictions, winner, team_code, corr_key, incorr_key, total_key, sk, ak =\
     kwargs['tg_stats'], kwargs['predictions'], 'Winner', 'Team Code', kwargs['correct_key'],\
     kwargs['incorrect_key'], kwargs['total_key'], kwargs['skip_keys'], kwargs['acc_key']
@@ -142,6 +201,21 @@ def accuracy(**kwargs):
     return result
 
 def accuracy_by_date(**kwargs):
+    """Computes accuracy of a given predictions map, but does so by date.
+       So each date will have a value similar to the output of accuracy()
+
+    Args:
+         tg_stats: stats of all games by teams, see team-game-statistics.csv
+         predictions: map of game ids to predicted outcome
+         game_info: home, away etc. information for a game, see game.csv
+         correct_key: key to use for correct results
+         incorrect_key: key to use for incorrect results
+         total_key: key to use for total results
+         acc_key: key to use for accuracy results
+         skip_keys: keys to skip in computing accuracy
+    
+    Returns: map of accuracy of predictions by date
+    """
     tg_stats, preds, gi, winner, tc, dt, ck, ik, tk, ak, sk = kwargs['tg_stats'], kwargs['predictions'],\
                                                           kwargs['game_info'], 'Winner', 'Team Code',\
                                                           'Date', kwargs['correct_key'], kwargs['incorrect_key'],\
@@ -157,9 +231,9 @@ def accuracy_by_date(**kwargs):
         p = preds[gid][winner]
         if info[dt] not in result:
             result[info[dt]] = {}
-        def_vals = filter(lambda k: result[info[dt]].get(k.keys()[0]) is None, 
+        default_values = filter(lambda k: result[info[dt]].get(k.keys()[0]) is None, 
                           [{ck: 0}, {ak: 0}, {ik: 0}, {tk: 0}])
-        for df in def_vals:
+        for df in default_values:
             result[info[dt]].update(df)
         if actual == p:
             result[info[dt]][ck] += 1
@@ -173,7 +247,15 @@ def accuracy_by_date(**kwargs):
     return result
 
 def filter_by_total(**kwargs):
-    abd, hi = kwargs['acc_by_date'], kwargs['hi_total']
+    """Filters map by hi_total
 
-    return {d: abd[d] for d in filter(lambda d: abd[d]['total'] > hi, abd)}
+    Args:
+         acc_by_date: map of accuracy by date, see accuracy_by_date()
+         hi_total: values must be higher than this
+    
+    Returns: map of date to their accuracy results
+    """
+    abd, low = kwargs['acc_by_date'], kwargs['lowest_val']
+
+    return {d: abd[d] for d in filter(lambda d: abd[d]['total'] > low, abd)}
         
