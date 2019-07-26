@@ -28,6 +28,7 @@ def averages(**kwargs):
                                                kwargs['skip_fields']
 
     game_avgs = {}
+    no_avgs = []
     for gid in team_game_stats.keys():
         avgs = model.team_avgs(game_code_id=gid, game_data=game_infos, tg_stats=team_game_stats)
         if len(avgs) == 2:
@@ -35,9 +36,9 @@ def averages(**kwargs):
             for tid, stats in avgs.iteritems():
                 game_avgs[gid][tid] = {k: stats[k] for k in set(stats.keys()).difference(skip_fields)}
         else:
-            pass
+            no_avgs.append(gid)
         
-    return game_avgs
+    return game_avgs, no_avgs
 
 def binary_classification_data(**kwargs):
     game_avgs, input_labels = kwargs['game_averages'], kwargs['labels']
@@ -75,21 +76,34 @@ def regression_data(**kwargs):
                 features[stat_key].append(value)
         labels.append(map(lambda tk: input_labels[gid][w][tk], team_avgs.keys()))
 
-    for k in features.keys():
-        features[k] = np.array(features[k])
+    return [features, labels]
+
+def cast_to_nparray(**kwargs):
+    lis = kwargs['lis']
+    
+    for k in lis[0].keys():
+        lis[0][k] = np.array(lis[0][k])
+
+    lis[1] = np.array(lis[1])
+
+    return lis
+
+def z_score_labels(**kwargs):
+    labels = kwargs['labels']
 
     flat = reduce(lambda l1,l2: l1 + l2, labels)
-    zs = da.z_scores(data=flat)
-    inds = [i for i in zip(range(0, len(flat) - 1, 2), range(1, len(flat), 2))]
-    scores = map(lambda i: [zs[i[0]], zs[i[-1]]], inds)
-
-    return features, np.array(scores)
+    if len(flat) % 2 == 0:        
+        zs = da.z_scores(data=flat)
+        inds = [i for i in zip(range(0, len(flat) - 1, 2), range(1, len(flat), 2))]
+        return map(lambda i: [zs[i[0]], zs[i[-1]]], inds)
+    else:
+        raise ValueError("Labels must have shape [n, 2]")
 
 def histogram_games(**kwargs):
     game_infos, game_stats, histo_key = kwargs['game_infos'], kwargs['game_stats'], kwargs['histo_key']
 
     histo = {}
-    for gid in game_stats.keys():
+    for gid in game_stats:
         info = game_infos[gid]
         if info[histo_key] not in histo:
             histo[info[histo_key]] = []
@@ -97,47 +111,40 @@ def histogram_games(**kwargs):
     
     return histo
 
-def sort_by(**kwargs):
-    input_map, key_sort = kwargs['input_map'], kwargs['key_sort']
-
-    lis = list(input_map.iteritems())
-    lis.sort(key=key_sort)
-
-    return lis
-
 def stochastic_split_data(**kwargs):
-    gh, sp, shc = kwargs['game_histo'], float(kwargs['split_percentage']), kwargs['histo_count']
+    gh, sp = kwargs['game_histo'], float(kwargs['split_percentage'])
 
     train = []
     test = []
     train_divi = True
-    for k, count in shc.iteritems():
+    for k, games in gh.iteritems():
+        count = len(games)
         if count == 1:
             if train_divi:
-                train.append(gh[k][0])
+                train.append(games[0])
                 train_divi = False
             else:
-                test.append(gh[k][0])
+                test.append(games[0])
                 train_divi = True
         elif count == 2:
             num = randint(0, 1)
-            train.append(gh[k][num])
-            test.append(gh[k][int(not num)])
+            train.append(games[num])
+            test.append(games[int(not num)])
         else:
             train_split = int(round(count * sp))
             test_split = count - train_split
             if test_split == 0:
                 train_split = int(math.ceil(float(count) / 2))
-            ind_range = set(range(len(gh[k])))
+            ind_range = set(range(count))
             train_ind = set(random.sample(ind_range, train_split))
             test_ind = ind_range.difference(train_ind)
-            train += [gh[k][e] for e in train_ind]
-            test += [gh[k][e] for e in test_ind]
+            train += [games[e] for e in train_ind]
+            test += [games[e] for e in test_ind]
 
     return train, test
 
 def static_split_data(**kwargs):
-    gh, sp, shc = kwargs['game_histo'], float(kwargs['split_percentage']), kwargs['histo_count']
+    gh, sp= kwargs['game_histo'], float(kwargs['split_percentage'])
 
     train = []
     test = []
@@ -145,59 +152,33 @@ def static_split_data(**kwargs):
     keys = list(gh.keys())
     keys.sort(key=lambda x: du.parse(x))
     for d in keys:
-        count = shc[d]
+        count = len(gh[d])
         k = d
         if count == 1:
             if train_divi:
-                train.append(gh[k][0])
+                train.append(gh[d][0])
                 train_divi = False
             else:
-                test.append(gh[k][0])
+                test.append(gh[d][0])
                 train_divi = True
         elif count == 2:
-            train.append(gh[k][0])
-            test.append(gh[k][1])
+            train.append(gh[d][0])
+            test.append(gh[d][1])
         else:
             train_split = int(round(count * sp))
             test_split = count - train_split
             if test_split == 0:
                 train_split = int(math.ceil(float(count) / 2))
-            num_games = len(gh[k])
+            num_games = len(gh[d])
             ind_range = set(range(num_games))
             train_ind = set(range(int(math.floor(num_games * sp))))
             test_ind = ind_range.difference(train_ind)
-            train += [gh[k][e] for e in train_ind]
-            test += [gh[k][e] for e in test_ind] 
+            train += [gh[d][e] for e in train_ind]
+            test += [gh[d][e] for e in test_ind] 
 
     train.sort()
     test.sort()
     return train, test
-
-def split_by_date(**kwargs):
-    split, gs = kwargs['split'], kwargs['game_info']
-
-    tdh = {}
-    for gid in split:
-        if gs[gid]['Date'] not in tdh:
-            tdh[gs[gid]['Date']] = []
-        tdh[gs[gid]['Date']].append(gid)
-
-    tdh = {k: len(tdh[k]) for k in tdh.keys()}
-    return sort_by(input_map=tdh, key_sort=lambda x: du.parse(x[0]))
-
-def visualize_split(**kwargs):
-    split, gs, tg = kwargs['split'], kwargs['game_info'], kwargs['total_games']
-
-    train = split_by_date(split=split[0], game_info=gs)
-    test = split_by_date(split=split[1], game_info=gs)  
-
-    for tr, tst in zip(train, test):
-        print("train: %s\ttest: %s" % (str(tr), str(tst)))
-
-    print("Defensive test. Intersection of train and test should be empty, (intersection train test): " 
-          + str(set(split[0]).intersection(set(split[1]))))
-    print("Addition of splits should equal total games. Total games: %s Addition: %s" 
-          % (str(tg), str(len(split[0]) + len(split[1]))))
 
 def stochastically_randomize_vector(**kwargs):
     in_net, r = kwargs['net'], kwargs['rate']
@@ -331,16 +312,6 @@ def z_scores(**kwargs):
     
     return {f: da.z_scores(data=fs[f]) for f in fs.keys()}
 
-def print_scores(**kwargs):
-    scores = kwargs['scores']
-
-    for s, data in scores.iteritems():
-        mi = min(data)
-        mx = max(data)
-        print((s, mi, mx, mx - mi))
-        
-    raw_input()
-
 def run_model(**kwargs):
     avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd = kwargs['team_avgs'], kwargs['split'],\
                                                                 kwargs['labels'], kwargs['features'],\
@@ -350,15 +321,15 @@ def run_model(**kwargs):
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir'
 
     train_features, train_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
-                                              labels=labels)
-
+                                                       labels=labels)
+    train_labels = z_score_labels(labels=train_labels)
+    train_features, train_labels = cast_to_nparray(lis=[train_features, train_labels])
     train_features = z_scores(data=train_features)
     train_features = {tf: train_features[tf] for tf in feat}
 
-    test_features, test_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[1]}, 
-                                            labels=labels)
-
-
+    test_features, test_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[1]}, labels=labels)
+    test_labels = z_score_labels(labels=test_labels)
+    test_features, test_labels = cast_to_nparray(lis=[test_features, test_labels])
     test_features = z_scores(data=test_features)
     test_features = {tf: test_features[tf] for tf in feat}
 
@@ -408,7 +379,7 @@ def season_data(**kwargs):
     for season_dir in ds:
         gs = game.game_stats(directory=season_dir)
         team_stats = tgs.team_game_stats(directory=season_dir)
-        avgs = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
+        avgs, _ = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')   
@@ -460,8 +431,7 @@ def evaluate_models(**kwargs):
         for d in dirs:
             sea_data = asd[d]
             ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
-            split = SPLIT_FUNCTION[ec[dk][sf]](game_histo=sea_data[h], split_percentage=ec[dk][sp],
-                                               histo_count={k: len(sea_data[h][k]) for k in sea_data[h].keys()})
+            split = SPLIT_FUNCTION[ec[dk][sf]](game_histo=sea_data[h], split_percentage=ec[dk][sp])
             for i in range(ec[rps]):
                 run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], 
                           estimator_config=ec)
