@@ -101,7 +101,3 @@ def test_static_split_data():
     _test_split(train=train_2, test=test_2, exp_total=exp_total)
     assert(train == train_2)
     assert(test == test_2)
-
-
-
-

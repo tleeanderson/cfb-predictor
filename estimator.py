@@ -436,6 +436,12 @@ def evaluate_models(**kwargs):
                 run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], 
                           estimator_config=ec)
 
+def print_collection(**kwargs):
+    coll = kwargs['coll']
+
+    for e in coll:
+        print(e)
+
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
     parser.add_argument('--estimator_configs', nargs='+', required=True, help='List of model configs')
@@ -452,7 +458,8 @@ def main(args):
             fc[-1].get(cf).update({'model_sub_dir': fc[1]})
 
         sea_dirs, all_dirs = season_dirs(configs=map(lambda c: (c[0], c[-1][cf]), file_configs))
-        print("Reading in data from disk from these directories: %s" % (str(all_dirs)))
+        print("Reading data from these directories: ")
+        print_collection(coll=all_dirs)
         sea_data = model_data(cache_dir=DATA_CACHE_DIR, dirs=all_dirs, cache_read_func=read_from_cache, 
                               cache_write_func=write_to_cache)
         print("Done reading data from disk")
