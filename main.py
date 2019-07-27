@@ -17,6 +17,15 @@ ACC_BY_DATE_CACHE = path.join(DATA_CACHE_DIR, 'histogram')
 ACCURACY_CACHE = path.join(DATA_CACHE_DIR, 'accuracy')
 
 def evaluate_model(**kwargs):
+    """Evaluates a given model_fn over a given set of dirs.
+
+    Args:
+         dirs: season directories
+         model_fn: function to evaluate data
+    
+    Returns: map of season dir name name to model_fn 
+             applied to each season
+    """
     ds, no_pred, model_fn = kwargs['dirs'], 'no_pred', kwargs['model_fn']
     
     result = {}
@@ -36,6 +45,13 @@ def evaluate_model(**kwargs):
     return result
 
 def model_meta_data(**kwargs):
+    """Given model accuracy data, computes max, min, range, and average.
+
+    Args:
+         acc_data: map of model data
+    
+    Returns: map of model metadata
+    """
     acc = kwargs['acc_data']
 
     accs = map(lambda x: x[1]['accuracy'], acc.iteritems())
@@ -46,8 +62,16 @@ def model_meta_data(**kwargs):
     model_meta['average'] = np.average(accs)
 
     return model_meta
+
+def accuracy_bar_chart_by_season(**kwargs):
+    """Creates accuracy bar chart by season. All games are included.
+
+    Args:
+         acc_data: map of model data by season
+         model_meta_data: metadata concerning acc_data
     
-def season_accuracy_graph(**kwargs):
+    Returns: None
+    """
     acc, mmd, ak, mia, ma, avg = kwargs['acc_data'], kwargs['model_meta_data'], 'accuracy', 'min_accuracy', 'max_accuracy',\
                                  'average'
 
@@ -65,22 +89,49 @@ def season_accuracy_graph(**kwargs):
     plt.title('Accuracy by season', fontsize=20)
     plt.legend([avg_label], loc=0)
     for i, v in enumerate(values):
-        ax.text(i - 0.15, v / 2, str(round(v, 2)), color='white', fontweight='bold')
+        ax.text(i - 0.2, 1, str(round(v, 2)) + '%', color='white', fontweight='bold')
 
     plt.show()
         
-def histogram_by_date(**kwargs):
-    abd = kwargs['acc_by_date']
+def accuracy_bar_chart_by_date_per_season(**kwargs):
+    """Creates bar chart of model by each day in season.
+
+    Args:
+         acc_by_date: map of model data by date per season
+    
+    Returns: None
+    """
+    abd, avg, num_games_avg = kwargs['acc_by_date'], 'acc_avg', 'num_games_avg'
 
     for s, s_acc in abd.iteritems():
-        plt.figure(num=s)
-        day_accs = map(lambda d: (d, s_acc[d]['accuracy']), s_acc)
+        day_accs = map(lambda d: (d, round(s_acc[d]['accuracy'] * 100, 2), s_acc[d]['total']), s_acc)
         day_accs.sort(key=lambda x: du.parse(x[0]))
-        ticks = np.arange(len(s_acc))
-        plt.bar(ticks, map(lambda d: d[1], day_accs), align='center', alpha=0.5)
-        plt.xticks(ticks, map(lambda d: d[0], day_accs))
-        plt.ylabel('Accuracy')
-        plt.title(s + ' Accuracy by Date')
+        xs = map(lambda t: t[0], day_accs)
+        acc_ys = map(lambda t: t[1], day_accs)
+        ng_ys = map(lambda t: t[2], day_accs)
+        acc_avg = round(np.average(acc_ys), 2)
+        ng_avg = round(np.average(ng_ys), 2)
+        acc_avg_label = avg + '=' + str(acc_avg)
+        ng_avg_label = num_games_avg + '=' + str(ng_avg)
+
+        fig, ax = plt.subplots()
+        fig.set_figwidth(18)
+        ax.bar(xs, acc_ys, 0.8, color='b')
+        ax.bar(xs, ng_ys, 0.8, color='g')
+
+        plt.axhline(y=acc_avg, linewidth=2.0, color='black', **{'label': acc_avg_label})
+        plt.axhline(y=ng_avg, linewidth=2.0, color='red', **{'label': ng_avg_label})
+
+        plt.ylabel('Percentage Accuracy', fontsize=16)
+        plt.xlabel('Day', fontsize=16)
+        plt.title('Accuracy by Day Within Season', fontsize=20)
+        plt.legend([acc_avg_label, ng_avg_label], loc=0)
+        for a, g in zip(enumerate(acc_ys), enumerate(ng_ys)):
+            ai, av = a
+            ax.text(ai - 0.2, 1, str(round(av, 2)) + '%', color='white', fontweight='bold')
+            gi, gv = g
+            ax.text(gi - 0.2, 5, str(gv) + 'g', color='white', fontweight='bold')
+
     plt.show()
 
 def main(args):
@@ -103,12 +154,12 @@ def main(args):
         for s, s_acc in acc_by_date.iteritems():
             filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, lowest_val=10)
 
-        histogram_by_date(acc_by_date=filt_abd)
+        accuracy_bar_chart_by_date_per_season(acc_by_date=filt_abd)
     else:
         print('Calculating accuracy by season')
         acc, cs = util.model_data(comp_func_args={'model_fn': model.accuracy}, cache_dir=ACCURACY_CACHE, **md_args)
         util.print_cache_reads(coll=cs, data_origin=ACCURACY_CACHE)
-        season_accuracy_graph(acc_data=acc, model_meta_data=model_meta_data(acc_data=acc))
+        accuracy_bar_chart_by_season(acc_data=acc, model_meta_data=model_meta_data(acc_data=acc))
 
 if __name__ == '__main__':
     main(sys.argv)
