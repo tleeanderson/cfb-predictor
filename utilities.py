@@ -157,7 +157,7 @@ def model_data(**kwargs):
     data = cf(dirs=compute_seasons, **cfa)
     cwf(cache_dir=cd, data=data)
 
-    return {k: data[k] if k in data else cache[k] for k in set(cache.keys()).union(set(data.keys()))}, compute_seasons
+    return {k: data[k] if k in data else cache[k] for k in set(ad)}, compute_seasons
 
 def print_collection(**kwargs):
     """Prints a given collection to stdout.
