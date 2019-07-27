@@ -17,11 +17,12 @@ from google.protobuf.json_format import MessageToDict
 import uuid
 import pickle
 import game
+import utilities as util
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
 TRAIN_STEPS = 3000
-DATA_CACHE_DIR = 'data_cache'
+DATA_CACHE_DIR = path.join(util.DATA_CACHE_DIR, 'estimator')
 
 def averages(**kwargs):
     """Computes averages for both teams in all games in team_game_stats.
@@ -609,66 +610,6 @@ def season_data(**kwargs):
 
     return result
 
-def write_to_cache(**kwargs):
-    """Writes given data to a given cache directory.
-
-    Args:
-         cache_dir: directory to write to
-         data: data to write to cache
-    
-    Returns: None
-    """
-    cd, data = kwargs['cache_dir'], kwargs['data']
-
-    for sea, d in data.iteritems():
-        with open(path.join(path.abspath(cd), path.basename(sea)), 'wb') as fh:
-            pickle.dump(d, fh)
-
-def read_from_cache(**kwargs):
-    """Reads from a given cache directory and renames resulting entries per
-       context_dir argument.
-
-    Args:
-         cache_dir: directory to read from
-         context_dir: directory to serve as parent of names in resulting
-                      key set
-    
-    Returns: map of file names to data
-    """
-    cd, context = kwargs['cache_dir'], kwargs['context_dir']
-
-    result = {}
-    for sea in glob.glob(path.join(path.abspath(cd), '*')):
-        with open(sea, 'rb') as fh:
-            entry = path.join(context, path.basename(sea))
-            result[entry] = pickle.load(fh)
-            
-    return result
-
-def model_data(**kwargs):
-    """Reads from cache, figures out which seasons need to be computed, computes
-       needed data, writes computed data to cache, and merges the data read from 
-       cache and computed in memory. Will create cache if it does not exist.
-
-    Args:
-         cache_dir: directory of cache
-         dirs: collection of directories
-         cache_read_func: function to read from cache
-         cache_write_func: functino to write from cache
-    
-    Returns: 
-    """
-    cd, ds, crf, cwf = kwargs['cache_dir'], kwargs['dirs'], kwargs['cache_read_func'], kwargs['cache_write_func']
-
-    if not path.exists(cd):
-        os.mkdir(cd)
-    cache = crf(cache_dir=cd, context_dir=path.dirname(list(ds)[0]))
-    compute_seasons = set(ds).difference(set(cache.keys()))
-    data = season_data(dirs=compute_seasons)
-    cwf(cache_dir=cd, data=data)
-
-    return {k: data[k] if k in data else cache[k] for k in set(cache.keys()).union(set(data.keys()))}
-
 def evaluate_models(**kwargs):
     """Evalutes models by taking in associated data and computing splits before executing the 
        model. So a stochastic split function would be executed twice for the same configuration.
@@ -696,19 +637,6 @@ def evaluate_models(**kwargs):
                 run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], 
                           estimator_config=ec)
 
-def print_collection(**kwargs):
-    """Prints a given collection to stdout.
-
-    Args:
-         coll: input collection
-    
-    Returns: None
-    """
-    coll = kwargs['coll']
-
-    for e in coll:
-        print(e)
-
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
     parser.add_argument('--estimator_configs', nargs='+', required=True, help='List of model configs')
@@ -726,10 +654,11 @@ def main(args):
 
         sea_dirs, all_dirs = season_dirs(configs=map(lambda c: (c[0], c[-1][cf]), file_configs))
         print("Reading data from these directories: ")
-        print_collection(coll=all_dirs)
-        sea_data = model_data(cache_dir=DATA_CACHE_DIR, dirs=all_dirs, cache_read_func=read_from_cache, 
-                              cache_write_func=write_to_cache)
-        print("Done reading data from disk")
+        util.print_collection(coll=all_dirs)
+        sea_data, cs = util.model_data(cache_dir=DATA_CACHE_DIR, cache_read_func=util.read_from_cache, 
+                                   cache_write_func=util.write_to_cache, all_dirs=all_dirs, comp_func=season_data, 
+                                   comp_func_args={}, context_dir=path.dirname(list(all_dirs)[0]))
+        util.print_cache_reads(coll=cs, data_origin=DATA_CACHE_DIR)
         evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs), sea_dirs=sea_dirs, 
                         all_sea_data=sea_data)
 

@@ -9,13 +9,18 @@ import sys
 from dateutil import parser as du
 import matplotlib.pyplot as plt
 import argparse
+import time
+import os
+
+DATA_CACHE_DIR = path.join(util.DATA_CACHE_DIR, 'static_analysis')
+ACC_BY_DATE_CACHE = path.join(DATA_CACHE_DIR, 'histogram')
+ACCURACY_CACHE = path.join(DATA_CACHE_DIR, 'accuracy')
 
 def evaluate_model(**kwargs):
-    directory, dir_suffix, no_pred, model_fn = kwargs['directory'], kwargs['dir_suffix'], 'no_pred',\
-                                          kwargs['model_fn']
+    ds, no_pred, model_fn = kwargs['dirs'], 'no_pred', kwargs['model_fn']
     
     result = {}
-    for data_dir in glob.glob(path.join(directory, dir_suffix)):
+    for data_dir in ds:
         stats = tgs.team_game_stats(directory=data_dir)
         game_data = game.game_stats(directory=data_dir)
         preds = model.predict_all(team_game_stats=stats, game_infos=game_data, no_pred_key=no_pred)
@@ -29,7 +34,7 @@ def evaluate_model(**kwargs):
                                           acc_key='accuracy', 
                                           skip_keys={no_pred})
     return result
-
+    
 def print_summary(**kwargs):
     acc = kwargs['acc']
 
@@ -72,10 +77,14 @@ def main(args):
                         help='Histograms the predictions of the model by date')
     args = parser.parse_args()
 
+    all_dirs = glob.glob(path.join(args.input_directory, args.dir_suffix))
+    md_args = {'cache_read_func': util.read_from_cache, 'cache_write_func': util.write_to_cache, 
+               'all_dirs': all_dirs, 'comp_func': evaluate_model, 'context_dir': args.input_directory}
     if args.accuracy_by_date:
         print("Histograming accuracy by date")
-        acc_by_date = evaluate_model(directory=args.input_directory, dir_suffix=args.dir_suffix, 
-                                           model_fn=model.accuracy_by_date)
+        acc_by_date, cs = util.model_data(comp_func_args={'model_fn': model.accuracy_by_date}, cache_dir=ACC_BY_DATE_CACHE, 
+                                      **md_args)
+        util.print_cache_reads(coll=cs, data_origin=ACC_BY_DATE_CACHE)
         filt_abd = {}
         for s, s_acc in acc_by_date.iteritems():
             filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, lowest_val=10)
@@ -83,7 +92,8 @@ def main(args):
         histogram_by_date(acc_by_date=filt_abd)
     else:
         print("Calculating accuracy by season")
-        acc = evaluate_model(directory=args.input_directory, dir_suffix=args.dir_suffix, model_fn=model.accuracy)
+        acc, cs = util.model_data(comp_func_args={'model_fn': model.accuracy}, cache_dir=ACCURACY_CACHE, **md_args)
+        util.print_cache_reads(coll=cs, data_origin=ACCURACY_CACHE)
         print_summary(acc=acc)
 
 if __name__ == '__main__':
