@@ -24,6 +24,15 @@ TRAIN_STEPS = 3000
 DATA_CACHE_DIR = 'data_cache'
 
 def averages(**kwargs):
+    """Computes averages for both teams in all games in team_game_stats.
+
+    Args:
+         team_game_stats: map of game ids to statistics
+         game_infos: home, away etc. information for a game, see game.csv
+         skip_fields: fields to take out when storing statistics in final result
+    
+    Returns: tuple of game avgs and game ids that could not be averaged
+    """
     team_game_stats, game_infos, skip_fields = kwargs['team_game_stats'], kwargs['game_infos'],\
                                                kwargs['skip_fields']
 
@@ -41,6 +50,17 @@ def averages(**kwargs):
     return game_avgs, no_avgs
 
 def binary_classification_data(**kwargs):
+    """(Deprecated) Creates input for binary classification model. Each 
+       example is organized such that each column represents the input
+       and the corresponding index in labels is the output.
+       
+
+    Args:
+         game_averages: map of game ids to the averages for both teams
+         labels: map containing labels for each game
+    
+    Returns: tuple of features and labels
+    """
     game_avgs, input_labels = kwargs['game_averages'], kwargs['labels']
 
     features = {}
@@ -62,6 +82,17 @@ def binary_classification_data(**kwargs):
     return features, np.array(labels)
 
 def regression_data(**kwargs):
+    """Creates input for regression model. Each example is organized
+       such that each column represents the input and the corresponding
+       index in labels is the output. Each label has shape [2] and each
+       value is a score for each team.
+
+    Args:
+         game_averages: map of game ids to the averages for both teams
+         labels: map containing labels for each game
+    
+    Returns: tuple of features and labels
+    """
     game_avgs, input_labels, ps, w = kwargs['game_averages'], kwargs['labels'], 'Points', 'Winner'
 
     features = {}
@@ -79,6 +110,13 @@ def regression_data(**kwargs):
     return [features, labels]
 
 def cast_to_nparray(**kwargs):
+    """Casts input elements to nparrays.
+
+    Args:
+         lis: lis of inputs
+    
+    Returns: lis of nparray types
+    """
     lis = kwargs['lis']
     
     for k in lis[0].keys():
@@ -89,6 +127,18 @@ def cast_to_nparray(**kwargs):
     return lis
 
 def z_score_labels(**kwargs):
+    """zscores an input with shape [n, 2]. If a different shape
+       is given, an error will be thrown. Average and standard 
+       deviation are derived from the input by numpy.
+
+    Args:
+         labels: inputs to zscore
+    
+    Returns: zscored labels where each element is mapped 
+             back to the same place
+    Raises:
+           ValueError: if input shape is not [n, 2]
+    """
     labels = kwargs['labels']
 
     flat = reduce(lambda l1,l2: l1 + l2, labels)
@@ -100,6 +150,16 @@ def z_score_labels(**kwargs):
         raise ValueError("Labels must have shape [n, 2]")
 
 def histogram_games(**kwargs):
+    """Creates a histogram of game ids by a given value. The corresponding
+       key is used for lookups in game_infos.
+
+    Args:
+         game_infos: home, away etc. information for a game, see game.csv
+         game_stats: set of game ids
+         histo_key: key to use when performing lookups in game_infos
+    
+    Returns: 
+    """
     game_infos, game_stats, histo_key = kwargs['game_infos'], kwargs['game_stats'], kwargs['histo_key']
 
     histo = {}
@@ -112,6 +172,19 @@ def histogram_games(**kwargs):
     return histo
 
 def stochastic_split_data(**kwargs):
+    """Computes a randomized split of data by some percentage. Note, this
+       function will produce different outputs for the same input as
+       index generation is randomized. The split will tend to
+       be slightly under the specified percentage due to rounding logic.
+
+    Args:
+         game_histo: histogram of games
+         split_percentage: percentage to split games. The first
+                           output will have split_percentage 
+                           values.
+    
+    Returns: tuple of lists
+    """
     gh, sp = kwargs['game_histo'], float(kwargs['split_percentage'])
 
     train = []
@@ -144,6 +217,18 @@ def stochastic_split_data(**kwargs):
     return train, test
 
 def static_split_data(**kwargs):
+    """Computes a deterministic split of data. Given the same input, this
+       function will produce the same output. The split may be slightly
+       different from the specified percentage due to rounding logic.
+
+    Args:
+         game_histo: histogram of games
+         split_percentage: percentage to split games. The first
+                           output will have split_percentage 
+                           values.
+
+    Returns: tuple of lists
+    """
     gh, sp= kwargs['game_histo'], float(kwargs['split_percentage'])
 
     train = []
@@ -181,6 +266,16 @@ def static_split_data(**kwargs):
     return train, test
 
 def stochastically_randomize_vector(**kwargs):
+    """For a given rate, will randomize an input vector. The rate
+       is used as a denominator, i.e. 1 / rate. So increases in rate 
+       will decrease the likelihood of randomizing the input vector.
+
+    Args:
+         net: the current tensor
+         rate: rate at which to randomize the input vector
+    
+    Returns: tensor
+    """
     in_net, r = kwargs['net'], kwargs['rate']
     net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], 
                                        maxval=int(r), dtype=tf.int32))[0], 
@@ -189,6 +284,19 @@ def stochastically_randomize_vector(**kwargs):
     return net
 
 def stochastically_randomize_half_vector(**kwargs):
+    """For a given rate, will randomize an half of an input vector. The rate
+       is used as a denominator, i.e. 1 / rate. So increases in rate will
+       decrease the likelihood of randomizing half of the input vector. The
+       half that is randomized is stochastic with 50% chance of either occuring, 
+       but not both.
+       
+    Args:
+         net: the current tensor
+         rate: rate at which to randomize the input vector
+         ub: upperbound on the split for the input vector
+    
+    Returns: tensor
+    """
     in_net, r, ub = kwargs['net'], kwargs['rate'], kwargs['ub']
     keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0], 
                          true_fn=lambda: tf.range(0, ub / 2), 
@@ -201,10 +309,28 @@ def stochastically_randomize_half_vector(**kwargs):
     return net
 
 def randomize_vector(**kwargs):
+    """Deterministically randomizes the whole input vector.
+
+    Args:
+         net: the current tensor
+    
+    Returns: tensor
+    """
     in_net = kwargs['net']
     return tf.map_fn(lambda gf: tf.random_shuffle(gf), in_net)
 
 def mean_power_error(**kwargs):
+    """Computes loss across an input batch of elements by 
+       1 / n * (mult(pow(abs(x - y), power), weight)). 
+
+    Args:
+         labels: actual outcomes
+         logits: scores from network
+         power: power to raise absolute value to
+         weight: multiply result of power
+    
+    Returns: average loss for batch
+    """
     labels, logits, p, w = kwargs['labels'], kwargs['logits'], kwargs['power'], kwargs['weight']
 
     return tf.math.reduce_mean(tf.map_fn(lambda i: tf.math.multiply(tf.math.pow(tf.math.abs(
@@ -212,6 +338,19 @@ def mean_power_error(**kwargs):
                                          tf.range(tf.shape(logits)[0]), dtype=tf.float32))
 
 def mean_piecewise_power_error(**kwargs):
+    """Allows for two power functions to be used. If input is less than alpha,
+       input is raised to power_alpha. Otherwise the input is raised to power.
+       Loss is computed by 1 / n * (mult(abs(x - y), (power | power_alpha)))
+
+    Args:
+         labels: actual outcomes
+         logits: scores from network
+         power_alpha: a power
+         alpha: exclusive upper bound for using power_alpha
+         power: a power
+    
+    Returns: average loss for batch
+    """
     labels, logits, pa, a, p = kwargs['labels'], kwargs['logits'], kwargs['power_alpha'], kwargs['alpha'], kwargs['power']
 
     return tf.math.reduce_mean(tf.map_fn(lambda i: 
@@ -221,6 +360,14 @@ def mean_piecewise_power_error(**kwargs):
                                         tf.gather(labels, i)))), tf.range(tf.shape(logits)[0]), dtype=tf.float32))
 
 def mean_absolute_error(**kwargs):
+    """Computes MAE on input batch.
+
+    Args:
+         labels: actual outcomes
+         logits: scores from network
+    
+    Returns: average loss for batch
+    """
     labels, logits = kwargs['labels'], kwargs['logits']
 
     return mean_power_error(labels=labels, logits=logits, power=1.0, weight=1.0)
@@ -234,6 +381,16 @@ LOSS_FUNCTION = {'mean_power_error': mean_power_error, 'mean_absolute_error': me
                  'mean_piecewise_power_error': mean_piecewise_power_error}
 
 def model_fn(features, labels, mode, params):
+    """Creates the model for all three estimator modes, namely, PREDICTION,
+       TRAIN, and TEST. Configured by protobufs, see config directory.
+
+    Args:
+         features: example inputs
+         labels: example outputs
+         params: map of extra params
+    
+    Returns: estimator specification
+    """
     ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc, lf, p, pa, a, w = params['estimator_config'],\
                                                             params['feature_columns'], 'dataAugment', 'randomizerFunc',\
                                                             'rate', 'dropout', 'hiddenLayer', 'neurons', 'regularization',\
@@ -301,18 +458,55 @@ def model_fn(features, labels, mode, params):
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
 def train_input_fn(features, labels, batch_size):
+    """Provides input to the model during training. Data is shuffled and 
+       batched.
+
+    Args:
+         features: inputs
+         labels: outputs
+         batch_size: size of batches for network
+    
+    Returns: data
+    """
     return tf.data.Dataset.from_tensor_slices((dict(features), labels))\
                              .shuffle(1000).repeat().batch(batch_size)
     
 def eval_input_fn(features, labels, batch_size):
+    """Provides input to the model during testing.
+
+    Args:
+         features: inputs
+         labels: outputs
+         batch_size: size of batches for network
+    
+    Returns: data
+    """
     return tf.data.Dataset.from_tensor_slices((features, labels)).batch(batch_size)
 
 def z_scores(**kwargs):
+    """zscores values in given map.
+
+    Args:
+         data: map of keys to collections
+    
+    Returns: a map
+    """
     fs = kwargs['data']
     
     return {f: da.z_scores(data=fs[f]) for f in fs.keys()}
 
 def run_model(**kwargs):
+    """Executes model. 
+
+    Args:
+         team_avgs: averages for teams
+         split: input data split into train and test
+         labels: outputs of examples
+         features: inputs of examples
+         estimator_config: protobuf.config file
+    
+    Returns: None
+    """
     avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd = kwargs['team_avgs'], kwargs['split'],\
                                                                 kwargs['labels'], kwargs['features'],\
                                                                 kwargs['estimator_config'], 'train',\
@@ -352,6 +546,15 @@ def run_model(**kwargs):
     tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 
 def season_dirs(**kwargs):
+    """Each config specifies a pattern and this function resolves 
+       that pattern against disk and associates the output with 
+       the configuration file's name.
+
+    Args:
+         configs: protobuf.config configurations 
+    
+    Returns: tuple of map and set
+    """
     cs, d, dp = kwargs['configs'], 'data', 'directoryPattern'
     
     result = {}
@@ -361,6 +564,14 @@ def season_dirs(**kwargs):
     return result, set(reduce(lambda f1,f2: f1 + f2, result.values()))
 
 def read_config(**kwargs):
+    """Given a file, reads it in and maps its values to a protobuf object.
+       The protobuf is then converted to a python dict and returned.
+
+    Args:
+         estimator_file: protobuf.config file
+    
+    Returns: map
+    """
     ef = kwargs['estimator_file']
 
     pb = estimator_pb2.Estimator()
@@ -373,6 +584,14 @@ def read_config(**kwargs):
     return result
 
 def season_data(**kwargs):
+    """Computes data by season. Reads in values from team-game-statistics.csv and 
+       game.csv and dervies more values.
+
+    Args:
+         dirs: directories from which to read input
+    
+    Returns: map
+    """
     ds = kwargs['dirs']
 
     result = {}
@@ -391,6 +610,14 @@ def season_data(**kwargs):
     return result
 
 def write_to_cache(**kwargs):
+    """Writes given data to a given cache directory.
+
+    Args:
+         cache_dir: directory to write to
+         data: data to write to cache
+    
+    Returns: None
+    """
     cd, data = kwargs['cache_dir'], kwargs['data']
 
     for sea, d in data.iteritems():
@@ -398,6 +625,16 @@ def write_to_cache(**kwargs):
             pickle.dump(d, fh)
 
 def read_from_cache(**kwargs):
+    """Reads from a given cache directory and renames resulting entries per
+       context_dir argument.
+
+    Args:
+         cache_dir: directory to read from
+         context_dir: directory to serve as parent of names in resulting
+                      key set
+    
+    Returns: map of file names to data
+    """
     cd, context = kwargs['cache_dir'], kwargs['context_dir']
 
     result = {}
@@ -409,6 +646,18 @@ def read_from_cache(**kwargs):
     return result
 
 def model_data(**kwargs):
+    """Reads from cache, figures out which seasons need to be computed, computes
+       needed data, writes computed data to cache, and merges the data read from 
+       cache and computed in memory. Will create cache if it does not exist.
+
+    Args:
+         cache_dir: directory of cache
+         dirs: collection of directories
+         cache_read_func: function to read from cache
+         cache_write_func: functino to write from cache
+    
+    Returns: 
+    """
     cd, ds, crf, cwf = kwargs['cache_dir'], kwargs['dirs'], kwargs['cache_read_func'], kwargs['cache_write_func']
 
     if not path.exists(cd):
@@ -421,6 +670,17 @@ def model_data(**kwargs):
     return {k: data[k] if k in data else cache[k] for k in set(cache.keys()).union(set(data.keys()))}
 
 def evaluate_models(**kwargs):
+    """Evalutes models by taking in associated data and computing splits before executing the 
+       model. So a stochastic split function would be executed twice for the same configuration.
+     
+
+    Args:
+         file_configs: tuples of associated configs and directories 
+         sea_dirs: directories by season
+         all_sea_data: data across all seasons
+    
+    Returns: None
+    """
     fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
                                                    kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
                                                    'team_avgs', 'labels', 'features', 'model_sub_dir', 'splitFunction',\
@@ -437,6 +697,13 @@ def evaluate_models(**kwargs):
                           estimator_config=ec)
 
 def print_collection(**kwargs):
+    """Prints a given collection to stdout.
+
+    Args:
+         coll: input collection
+    
+    Returns: None
+    """
     coll = kwargs['coll']
 
     for e in coll:
