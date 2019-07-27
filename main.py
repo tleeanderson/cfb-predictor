@@ -16,8 +16,8 @@ def evaluate_model(**kwargs):
     
     result = {}
     for data_dir in glob.glob(path.join(directory, dir_suffix)):
-        stats = team_game_stats(directory=data_dir)
-        game_data = game_stats(directory=data_dir)
+        stats = tgs.team_game_stats(directory=data_dir)
+        game_data = game.game_stats(directory=data_dir)
         preds = model.predict_all(team_game_stats=stats, game_infos=game_data, no_pred_key=no_pred)
         stats_labels = tgs.add_labels(team_game_stats=stats)
         result[data_dir] = model_fn(tg_stats=stats_labels,
