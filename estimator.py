@@ -434,18 +434,16 @@ def model_fn(features, labels, mode, params):
 
     tf.summary.histogram('logits_' + str(2), net)
 
-    predicted_winners = tf.argmax(net, 1)
+    predicted_winner = tf.argmax(net, 1)
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {
-            'class_ids': predicted_winners[:, tf.newaxis],
-            'probabilities': net,
-            'logits': net,
+            'scores': net,
         }
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
     
     loss = LOSS_FUNCTION[ec[lf][ty]](labels=tf.dtypes.cast(labels, tf.float32), logits=net, power=ec[lf].get(p), 
                                      power_alpha=ec[lf].get(pa), alpha=ec[lf].get(a), weight=ec[lf].get(w))
-    accuracy = tf.metrics.accuracy(tf.argmax(labels, 1), predicted_winners)
+    accuracy = tf.metrics.accuracy(tf.argmax(labels, 1), predicted_winner)
     wl_acc = 'win loss accuracy'
     tf.summary.scalar(wl_acc, accuracy[1])
 
@@ -496,8 +494,12 @@ def z_scores(**kwargs):
     
     return {f: da.z_scores(data=fs[f]) for f in fs.keys()}
 
+def predict_input_fn(features, labels, batch_size):
+    return tf.data.Dataset.from_tensor_slices((dict(features), labels)).batch(batch_size)
+
 def run_model(**kwargs):
-    """Executes model. 
+    """Creates train features, train labels, test features, and test labels 
+       and executes model. The model is both trained and tested.
 
     Args:
          team_avgs: averages for teams
@@ -514,6 +516,9 @@ def run_model(**kwargs):
                                                                 'saveCheckpointsSteps', 'neurons',\
                                                                 'hiddenLayer', 'modelDir', 'trainSteps',\
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir'
+    #mock up
+    predict = True
+    saved_model = path.abspath('mae_model_cfbstats-com-2005-1-5-0_dd0e01d0-ace1-11e9-a887-b8975a6ac69a')
 
     train_features, train_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
                                                        labels=labels)
@@ -532,19 +537,29 @@ def run_model(**kwargs):
     for f in feat:
         feature_cols.append(tf.feature_column.numeric_column(key=f))
 
+    model_dir = saved_model if predict else path.join(ec[t][md], "%s_%s" % (str(ec[rd]), str(uuid.uuid1()))) 
     run_config = tf.estimator.RunConfig(save_checkpoints_steps=ec[t][scs])
-    classifier = tf.estimator.Estimator(model_fn=model_fn, 
+    model = tf.estimator.Estimator(model_fn=model_fn, 
                                         params={'feature_columns': feature_cols, 'estimator_config': ec}, 
                                         config=run_config, 
-                                        model_dir=path.join(ec[t][md], "%s_%s" % (str(ec[rd]), 
-                                                                                  str(uuid.uuid1()))))
+                                        model_dir=model_dir)
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_features, 
                                                                         train_labels, ec[t][bs]), 
                                         max_steps=ec[t][ts])
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(test_features, 
                                                                      test_labels, ec[t][bs]), 
                                       throttle_secs=ec[t][ets])
-    tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
+    if predict:
+        output = model.predict(lambda: predict_input_fn(test_features, test_labels, ec[t][bs]))
+        c = 1
+        try:
+            while True:
+                print("Num: %s, data: %s" % (str(c), str(next(output))))
+                c += 1
+        except StopIteration:
+            print('Done iterating')
+    else:
+        tf.estimator.train_and_evaluate(model, train_spec, eval_spec)
 
 def season_dirs(**kwargs):
     """Each config specifies a pattern and this function resolves 
