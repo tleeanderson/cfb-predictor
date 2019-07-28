@@ -5,6 +5,7 @@ import pickle
 import os
 
 DATA_CACHE_DIR = 'data_cache'
+FIGURE_DIR = 'figures'
 
 #functions that serve a general purpose
 

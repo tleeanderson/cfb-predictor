@@ -12,9 +12,12 @@ import argparse
 import time
 import os
 
-DATA_CACHE_DIR = path.join(util.DATA_CACHE_DIR, 'static_analysis')
+STATIC_ANALYSIS = 'static_analysis'
+DATA_CACHE_DIR = path.join(util.DATA_CACHE_DIR, STATIC_ANALYSIS)
 ACC_BY_DATE_CACHE = path.join(DATA_CACHE_DIR, 'histogram')
 ACCURACY_CACHE = path.join(DATA_CACHE_DIR, 'accuracy')
+FIGURE_DIR = path.join(util.FIGURE_DIR, STATIC_ANALYSIS)
+YEAR_FROM_DIR = lambda s: path.basename(s).replace('cfbstats-com-', '')[:4]
 
 def evaluate_model(**kwargs):
     """Evaluates a given model_fn over a given set of dirs.
@@ -72,26 +75,30 @@ def accuracy_bar_chart_by_season(**kwargs):
     
     Returns: None
     """
-    acc, mmd, ak, mia, ma, avg = kwargs['acc_data'], kwargs['model_meta_data'], 'accuracy', 'min_accuracy', 'max_accuracy',\
-                                 'average'
+    acc, mmd, ak, mia, ma, avg, t, fl = kwargs['acc_data'], kwargs['model_meta_data'], 'accuracy', 'min_accuracy',\
+                                        'max_accuracy', 'average', 'total', kwargs['fig_loc']
 
     th = mmd[avg] * 100
-    values = np.array(map(lambda s: acc[s][ak] * 100, acc))
-    x = sorted(map(lambda s: path.basename(s).replace('cfbstats-com-', '')[:4], acc.keys()))
+    acc_ys = np.array(map(lambda s: acc[s][ak] * 100, acc))
+    ng_ys = np.array(map(lambda s: acc[s][t], acc))
+    x = sorted(map(YEAR_FROM_DIR, acc.keys()))
     avg_label = avg + '=' + str(round(mmd[avg] * 100, 2))
 
     fig, ax = plt.subplots()
     fig.set_figwidth(14)
-    ax.bar(x, values, 0.8, color='b')  
+    ax.bar(x, acc_ys, 0.8, color='b')  
     plt.axhline(y=th, linewidth=1.5, color='k', **{'label': avg_label})
     plt.ylabel('Percentage Accuracy', fontsize=16)
     plt.xlabel('Season', fontsize=16)
-    plt.title('Accuracy by season', fontsize=20)
+    plt.title('Accuracy by Season', fontsize=20)
     plt.legend([avg_label], loc=0)
-    for i, v in enumerate(values):
-        ax.text(i - 0.2, 1, str(round(v, 2)) + '%', color='white', fontweight='bold')
+    for acc, g in zip(enumerate(acc_ys), enumerate(ng_ys)):
+        ai, av = acc
+        ax.text(ai - 0.2, 1, str(round(av, 2)) + '%', color='white', fontweight='bold')
+        gi, gv = g
+        ax.text(gi - 0.2, 5, str(gv) + 'g', color='white', fontweight='bold')
 
-    plt.show()
+    plt.savefig(path.join(fl, 'accuracy_by_season.png'))
         
 def accuracy_bar_chart_by_date_per_season(**kwargs):
     """Creates bar chart of model by each day in season.
@@ -101,7 +108,7 @@ def accuracy_bar_chart_by_date_per_season(**kwargs):
     
     Returns: None
     """
-    abd, avg, num_games_avg = kwargs['acc_by_date'], 'acc_avg', 'num_games_avg'
+    abd, avg, num_games_avg, fl = kwargs['acc_by_date'], 'acc_avg', 'num_games_avg', kwargs['fig_loc']
 
     for s, s_acc in abd.iteritems():
         day_accs = map(lambda d: (d, round(s_acc[d]['accuracy'] * 100, 2), s_acc[d]['total']), s_acc)
@@ -120,7 +127,7 @@ def accuracy_bar_chart_by_date_per_season(**kwargs):
         ax.bar(xs, ng_ys, 0.8, color='g')
 
         plt.axhline(y=acc_avg, linewidth=2.0, color='black', **{'label': acc_avg_label})
-        plt.axhline(y=ng_avg, linewidth=2.0, color='red', **{'label': ng_avg_label})
+        plt.axhline(y=ng_avg, linewidth=2.0, color='purple', **{'label': ng_avg_label})
 
         plt.ylabel('Percentage Accuracy', fontsize=16)
         plt.xlabel('Day', fontsize=16)
@@ -128,11 +135,11 @@ def accuracy_bar_chart_by_date_per_season(**kwargs):
         plt.legend([acc_avg_label, ng_avg_label], loc=0)
         for a, g in zip(enumerate(acc_ys), enumerate(ng_ys)):
             ai, av = a
-            ax.text(ai - 0.2, 1, str(round(av, 2)) + '%', color='white', fontweight='bold')
+            ax.text(ai - 0.3, 1, str(round(av, 2)) + '%', color='white', fontweight='bold')
             gi, gv = g
-            ax.text(gi - 0.2, 5, str(gv) + 'g', color='white', fontweight='bold')
+            ax.text(gi - 0.3, 5, str(gv) + 'g', color='white', fontweight='bold')
 
-    plt.show()
+        plt.savefig(path.join(fl, str(YEAR_FROM_DIR(s)) + '_accuracy_by_date.png'))
 
 def main(args):
     parser = argparse.ArgumentParser(description='Run static analysis on the cfb dataset')
@@ -145,6 +152,8 @@ def main(args):
     all_dirs = glob.glob(path.join(args.input_directory, args.dir_suffix))
     md_args = {'cache_read_func': util.read_from_cache, 'cache_write_func': util.write_to_cache, 
                'all_dirs': all_dirs, 'comp_func': evaluate_model, 'context_dir': args.input_directory}
+    if not path.exists(FIGURE_DIR):
+        os.makedirs(FIGURE_DIR)
     if args.accuracy_by_date:
         print('Histograming accuracy by date')
         acc_by_date, cs = util.model_data(comp_func_args={'model_fn': model.accuracy_by_date}, cache_dir=ACC_BY_DATE_CACHE, 
@@ -154,12 +163,13 @@ def main(args):
         for s, s_acc in acc_by_date.iteritems():
             filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, lowest_val=10)
 
-        accuracy_bar_chart_by_date_per_season(acc_by_date=filt_abd)
+        accuracy_bar_chart_by_date_per_season(acc_by_date=filt_abd, fig_loc=FIGURE_DIR)
     else:
         print('Calculating accuracy by season')
         acc, cs = util.model_data(comp_func_args={'model_fn': model.accuracy}, cache_dir=ACCURACY_CACHE, **md_args)
         util.print_cache_reads(coll=cs, data_origin=ACCURACY_CACHE)
-        accuracy_bar_chart_by_season(acc_data=acc, model_meta_data=model_meta_data(acc_data=acc))
+        accuracy_bar_chart_by_season(acc_data=acc, model_meta_data=model_meta_data(acc_data=acc), fig_loc=FIGURE_DIR)
+    print("Figures written to %s" % (path.abspath(FIGURE_DIR)))
 
 if __name__ == '__main__':
     main(sys.argv)

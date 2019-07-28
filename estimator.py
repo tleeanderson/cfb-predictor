@@ -530,7 +530,6 @@ def run_model(**kwargs):
 
     feature_cols = []
     for f in feat:
-        print(f)
         feature_cols.append(tf.feature_column.numeric_column(key=f))
 
     run_config = tf.estimator.RunConfig(save_checkpoints_steps=ec[t][scs])
