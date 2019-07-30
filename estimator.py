@@ -520,8 +520,8 @@ def run_model(**kwargs):
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir',\
                                                                 kwargs['train_data'], kwargs['test_data']
     #mock up
-    predict = False
-    saved_model = path.abspath('mae_model_cfbstats-com-2005-1-5-0_dd0e01d0-ace1-11e9-a887-b8975a6ac69a')
+    predict = True
+    saved_model = path.abspath('single_dist_cfbstats-com-2005-1-5-0_2a1429a8-b266-11e9-9055-b8975a6ac69a')
 
     train_features, train_labels = tr
     test_features, test_labels = tst
