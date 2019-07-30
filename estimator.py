@@ -520,7 +520,7 @@ def run_model(**kwargs):
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir',\
                                                                 kwargs['train_data'], kwargs['test_data']
     #mock up
-    predict = True
+    predict = False
     saved_model = path.abspath('single_dist_cfbstats-com-2005-1-5-0_2a1429a8-b266-11e9-9055-b8975a6ac69a')
 
     train_features, train_labels = tr
@@ -647,17 +647,17 @@ def evaluate_models(**kwargs):
     
     Returns: None
     """
-    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
+    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d, ms = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
                                                    kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
                                                    'team_avgs', 'labels', 'features', 'model_sub_dir', 'splitFunction',\
-                                                   'runsPerSeason', 'norm_data', 'regression_data'
+                                                   'runsPerSeason', 'norm_data', 'regression_data', kwargs['model_splits']
 
     for f in fcs:
         ec, dirs = f
         for d in dirs:
             sea_data = asd[d]
             ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
-            split = SPLIT_FUNCTION[ec[dk][sf]](game_histo=sea_data[h], split_percentage=ec[dk][sp])
+            split = ms[d][ec[dk][sf]][ec[dk][sp]]
             norm_feats, norm_labels = [z_scores(data={k: sea_data[reg_d][0][k] for k in sea_data[nd].keys()}), 
                                                            z_score_labels(labels=sea_data[reg_d][1])]
             train, test = split_model_data(data_split=split, model_data=(norm_feats, norm_labels, sea_data[reg_d][-1]))
@@ -665,6 +665,23 @@ def evaluate_models(**kwargs):
             for i in range(ec[rps]):
                 run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], 
                           estimator_config=ec, train_data=np_train, test_data=np_test)
+
+def model_data_splits(**kwargs):
+    file_cs, sp, sf, dk, sea_data, h = kwargs['file_configs'], 'splitPercent', 'splitFunction', 'data', kwargs['season_data'], 'histo'
+
+    splits = {}
+    for fc in file_cs:
+        fn, dirs, conf = fc
+        for d in dirs:
+            if d not in splits:
+                splits[d] = {}
+            if conf[dk][sf] not in splits[d]:
+                splits[d][conf[dk][sf]] = {}
+            if conf[dk][sp] not in splits[d][conf[dk][sf]]:
+                splits[d][conf[dk][sf]][conf[dk][sp]] = SPLIT_FUNCTION[conf[dk][sf]](game_histo=sea_data[d][h], 
+                                                                                     split_percentage=conf[dk][sp])
+   
+    return splits
 
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
@@ -688,8 +705,9 @@ def main(args):
                                    cache_write_func=util.write_to_cache, all_dirs=all_dirs, comp_func=season_data, 
                                    comp_func_args={}, context_dir=path.dirname(list(all_dirs)[0]))
         util.print_cache_reads(coll=cs, data_origin=DATA_CACHE_DIR)
+        splits = model_data_splits(file_configs=map(lambda f: (f[0], sea_dirs[f[0]], f[-1][cf]), file_configs), season_data=sea_data)
         evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs), sea_dirs=sea_dirs, 
-                        all_sea_data=sea_data)
+                        all_sea_data=sea_data, model_splits=splits)
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)
