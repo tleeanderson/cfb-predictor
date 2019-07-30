@@ -98,6 +98,7 @@ def regression_data(**kwargs):
 
     features = {}
     labels = []
+    game_ids = []
     for gid, team_avgs in game_avgs.iteritems():
         for ta, feature_team_id in zip(team_avgs.iteritems(), ['-0', '-1']):
             tid, stats = ta
@@ -107,8 +108,9 @@ def regression_data(**kwargs):
                     features[stat_key] = []
                 features[stat_key].append(value)
         labels.append(map(lambda tk: input_labels[gid][w][tk], team_avgs.keys()))
+        game_ids.append(gid)
 
-    return [features, labels]
+    return [features, labels, tuple(game_ids)]
 
 def cast_to_nparray(**kwargs):
     """Casts input elements to nparrays.
@@ -230,7 +232,7 @@ def static_split_data(**kwargs):
 
     Returns: tuple of lists
     """
-    gh, sp= kwargs['game_histo'], float(kwargs['split_percentage'])
+    gh, sp = kwargs['game_histo'], float(kwargs['split_percentage'])
 
     train = []
     test = []
@@ -510,28 +512,19 @@ def run_model(**kwargs):
     
     Returns: None
     """
-    avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd = kwargs['team_avgs'], kwargs['split'],\
+    avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd, tr, tst = kwargs['team_avgs'], kwargs['split'],\
                                                                 kwargs['labels'], kwargs['features'],\
                                                                 kwargs['estimator_config'], 'train',\
                                                                 'saveCheckpointsSteps', 'neurons',\
                                                                 'hiddenLayer', 'modelDir', 'trainSteps',\
-                                                                'evalThrottleSecs', 'batchSize', 'run_dir'
+                                                                'evalThrottleSecs', 'batchSize', 'run_dir',\
+                                                                kwargs['train_data'], kwargs['test_data']
     #mock up
-    predict = True
+    predict = False
     saved_model = path.abspath('mae_model_cfbstats-com-2005-1-5-0_dd0e01d0-ace1-11e9-a887-b8975a6ac69a')
 
-    train_features, train_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[0]}, 
-                                                       labels=labels)
-    train_labels = z_score_labels(labels=train_labels)
-    train_features, train_labels = cast_to_nparray(lis=[train_features, train_labels])
-    train_features = z_scores(data=train_features)
-    train_features = {tf: train_features[tf] for tf in feat}
-
-    test_features, test_labels = regression_data(game_averages={gid: avgs[gid] for gid in split[1]}, labels=labels)
-    test_labels = z_score_labels(labels=test_labels)
-    test_features, test_labels = cast_to_nparray(lis=[test_features, test_labels])
-    test_features = z_scores(data=test_features)
-    test_features = {tf: test_features[tf] for tf in feat}
+    train_features, train_labels = tr
+    test_features, test_labels = tst
 
     feature_cols = []
     for f in feat:
@@ -618,12 +611,29 @@ def season_data(**kwargs):
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')   
-        features = da.normal_dists(field_avgs=regression_data(game_averages=avgs, labels=labels)[0]).keys()
+        #features = da.normal_dists(field_avgs=regression_data(game_averages=avgs, labels=labels)[0]).keys()
+        reg = regression_data(game_averages=avgs, labels=labels)
+        features = da.normal_dists(field_avgs=reg[0])
 
-        result.update({season_dir: {'features': features, 'labels': labels, 'team_avgs': avgs, 
-                                    'game_stats': gs, 'team_stats': team_stats, 'histo': histo}})
+        result.update({season_dir: {'features': features.keys(), 'labels': labels, 'team_avgs': avgs, 
+                                    'game_stats': gs, 'team_stats': team_stats, 'histo': histo, 'regression_data': reg, 
+                                    'norm_data': features}})
 
     return result
+
+def split_model_data(**kwargs):
+    split, md = kwargs['data_split'], kwargs['model_data']
+    feat, lab, games = md
+    train, test = split
+
+    gid_to_ind = {v: i for i, v in enumerate(games)}
+    train_inds, test_inds = map(lambda gids: map(lambda g: gid_to_ind[g], gids), (train, test))
+    train_lab, test_lab = map(lambda inds: map(lambda i: lab[i], inds), (train_inds, test_inds))
+
+    train_feat = {k: map(lambda i: feat[k][i], train_inds) for k in feat.keys()}
+    test_feat = {k: map(lambda i: feat[k][i], test_inds) for k in feat.keys()}
+
+    return ((train_feat, train_lab), (test_feat, test_lab))
 
 def evaluate_models(**kwargs):
     """Evalutes models by taking in associated data and computing splits before executing the 
@@ -637,10 +647,10 @@ def evaluate_models(**kwargs):
     
     Returns: None
     """
-    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
+    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
                                                    kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
                                                    'team_avgs', 'labels', 'features', 'model_sub_dir', 'splitFunction',\
-                                                   'runsPerSeason'
+                                                   'runsPerSeason', 'norm_data', 'regression_data'
 
     for f in fcs:
         ec, dirs = f
@@ -648,9 +658,13 @@ def evaluate_models(**kwargs):
             sea_data = asd[d]
             ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
             split = SPLIT_FUNCTION[ec[dk][sf]](game_histo=sea_data[h], split_percentage=ec[dk][sp])
+            norm_feats, norm_labels = [z_scores(data={k: sea_data[reg_d][0][k] for k in sea_data[nd].keys()}), 
+                                                           z_score_labels(labels=sea_data[reg_d][1])]
+            train, test = split_model_data(data_split=split, model_data=(norm_feats, norm_labels, sea_data[reg_d][-1]))
+            np_train, np_test = cast_to_nparray(lis=list(train)), cast_to_nparray(lis=list(test))
             for i in range(ec[rps]):
                 run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], 
-                          estimator_config=ec)
+                          estimator_config=ec, train_data=np_train, test_data=np_test)
 
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')

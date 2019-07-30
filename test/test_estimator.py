@@ -36,7 +36,7 @@ def test_regression_data():
     labels = {gid_1: {w: {tid_1: p1, tid_2: p2}}, 
               gid_2: {w: {tid_1: p3, tid_2: p4}}}
 
-    out_feat, out_lab = est.regression_data(game_averages=ga, labels=labels)
+    out_feat, out_lab, gids = est.regression_data(game_averages=ga, labels=labels)
 
     games_by_row = np.transpose(map(lambda f: out_feat[f], out_feat))
     assert({ry + '-0', ry + '-1', ps + '-0', ps + '-1'} == set(out_feat.keys()))
@@ -46,6 +46,10 @@ def test_regression_data():
     out_lab_sets = tuple(map(lambda la: set(la), out_lab))
     assert(games_by_row_sets.index({ps1, ry1, ps2, ry2}) == out_lab_sets.index({p1, p2}))
     assert(games_by_row_sets.index({ps3, ry3, ps4, ry4}) == out_lab_sets.index({p3, p4}))
+    assert(games_by_row_sets.index({ps1, ry1, ps2, ry2}) == out_lab_sets.index({p1, p2}) 
+           == gids.index(gid_1))
+    assert(games_by_row_sets.index({ps3, ry3, ps4, ry4}) == out_lab_sets.index({p3, p4}) 
+           == gids.index(gid_2))
 
 def test_zscore_labels():
     labels = [[i, i + 1] for i in range(10)]
