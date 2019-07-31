@@ -146,9 +146,11 @@ def z_score_labels(**kwargs):
 
     flat = reduce(lambda l1,l2: l1 + l2, labels)
     if len(flat) % 2 == 0:        
-        zs = da.z_scores(data=flat)
+        #zs = da.z_scores(data=flat)
+        mean, std = np.average(flat), np.std(flat)
+        zs = da.z_scores_args(data=flat, mean=mean, stddev=std)
         inds = [i for i in zip(range(0, len(flat) - 1, 2), range(1, len(flat), 2))]
-        return map(lambda i: [zs[i[0]], zs[i[-1]]], inds)
+        return map(lambda i: [zs[i[0]], zs[i[-1]]], inds), mean, std
     else:
         raise ValueError("Labels must have shape [n, 2]")
 
@@ -496,10 +498,7 @@ def z_scores(**kwargs):
     
     return {f: da.z_scores(data=fs[f]) for f in fs.keys()}
 
-def predict_input_fn(features, labels, batch_size):
-    return tf.data.Dataset.from_tensor_slices((dict(features), labels)).batch(batch_size)
-
-def run_model(**kwargs):
+def create_model(**kwargs):
     """Creates train features, train labels, test features, and test labels 
        and executes model. The model is both trained and tested.
 
@@ -512,17 +511,13 @@ def run_model(**kwargs):
     
     Returns: None
     """
-    avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd, tr, tst = kwargs['team_avgs'], kwargs['split'],\
+    avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd, tr, tst, mpd = kwargs['team_avgs'], kwargs['split'],\
                                                                 kwargs['labels'], kwargs['features'],\
                                                                 kwargs['estimator_config'], 'train',\
                                                                 'saveCheckpointsSteps', 'neurons',\
                                                                 'hiddenLayer', 'modelDir', 'trainSteps',\
                                                                 'evalThrottleSecs', 'batchSize', 'run_dir',\
-                                                                kwargs['train_data'], kwargs['test_data']
-    #mock up
-    predict = False
-    saved_model = path.abspath('single_dist_cfbstats-com-2005-1-5-0_2a1429a8-b266-11e9-9055-b8975a6ac69a')
-
+                                                                kwargs['train_data'], kwargs['test_data'], kwargs['model_pred_dir']
     train_features, train_labels = tr
     test_features, test_labels = tst
 
@@ -530,7 +525,7 @@ def run_model(**kwargs):
     for f in feat:
         feature_cols.append(tf.feature_column.numeric_column(key=f))
 
-    model_dir = saved_model if predict else path.join(ec[t][md], "%s_%s" % (str(ec[rd]), str(uuid.uuid1()))) 
+    model_dir = mpd if mpd else path.join(ec[t][md], "%s_%s" % (str(ec[rd]), str(uuid.uuid1()))) 
     run_config = tf.estimator.RunConfig(save_checkpoints_steps=ec[t][scs])
     model = tf.estimator.Estimator(model_fn=model_fn, 
                                         params={'feature_columns': feature_cols, 'estimator_config': ec}, 
@@ -542,17 +537,13 @@ def run_model(**kwargs):
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(test_features, 
                                                                      test_labels, ec[t][bs]), 
                                       throttle_secs=ec[t][ets])
-    if predict:
-        output = model.predict(lambda: predict_input_fn(test_features, test_labels, ec[t][bs]))
-        c = 1
-        try:
-            while True:
-                print("Num: %s, data: %s" % (str(c), str(next(output))))
-                c += 1
-        except StopIteration:
-            print('Done iterating')
-    else:
-        tf.estimator.train_and_evaluate(model, train_spec, eval_spec)
+
+    return model, train_spec, eval_spec
+
+def train_and_evaluate(**kwargs):
+    m, train_sp, eval_sp = kwargs['model'], kwargs['train_sp'], kwargs['eval_sp']
+
+    tf.estimator.train_and_evaluate(model, train_sp, eval_sp)
 
 def season_dirs(**kwargs):
     """Each config specifies a pattern and this function resolves 
@@ -601,7 +592,7 @@ def season_data(**kwargs):
     
     Returns: map
     """
-    ds = kwargs['dirs']
+    ds, ps = kwargs['dirs'], 'Points'
 
     result = {}
     for season_dir in ds:
@@ -611,7 +602,6 @@ def season_data(**kwargs):
         team_stats = {k: team_stats[k] for k in avgs.keys()}        
         labels = tgs.add_labels(team_game_stats=team_stats)
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')   
-        #features = da.normal_dists(field_avgs=regression_data(game_averages=avgs, labels=labels)[0]).keys()
         reg = regression_data(game_averages=avgs, labels=labels)
         features = da.normal_dists(field_avgs=reg[0])
 
@@ -635,6 +625,40 @@ def split_model_data(**kwargs):
 
     return ((train_feat, train_lab), (test_feat, test_lab))
 
+def model_predict(**kwargs):
+    m, feat, lab, bs = kwargs['model'], kwargs['features'], kwargs['labels'],\
+                       kwargs['batch_size']
+
+    def predict_input_fn(features, labels, batch_size):
+        return tf.data.Dataset.from_tensor_slices((dict(features), labels)).batch(batch_size)
+
+    return m.predict(lambda: predict_input_fn(feat, lab, bs))
+
+def scores_from_network(**kwargs):
+    no, mean, std, s = kwargs['net_out'], kwargs['mean'], kwargs['stddev'], 'scores'
+
+    scores = []
+    try:
+        while True:
+            out = next(no)
+            scores.append(da.reverse_zscores(data=out[s], mean=mean, stddev=std))
+    except StopIteration:
+        pass 
+
+    return scores
+
+def compare_pred_scores(**kwargs):
+    ps, gids, og_lab = kwargs['pred_scores'], kwargs['gids'], kwargs['original_labels']
+
+    comps = {}
+    for i, s in enumerate(ps):
+        print(gids[i])
+        #comps[gids[i]] = {'hey': [1, 2]}
+        comps[gids[i]] = {'predictions': s, 'label': og_lab[i], 'distance': np.abs(np.array(og_lab[i]) - np.array(s)),
+                          'correct': s.index(max(s)) == og_lab[i].index(max(og_lab[i]))}
+
+    return comps
+
 def evaluate_models(**kwargs):
     """Evalutes models by taking in associated data and computing splits before executing the 
        model. So a stochastic split function would be executed twice for the same configuration.
@@ -647,24 +671,41 @@ def evaluate_models(**kwargs):
     
     Returns: None
     """
-    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d, ms = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
+    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d, ms, t, bs = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
                                                    kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
                                                    'team_avgs', 'labels', 'features', 'model_sub_dir', 'splitFunction',\
-                                                   'runsPerSeason', 'norm_data', 'regression_data', kwargs['model_splits']
-
+                                                   'runsPerSeason', 'norm_data', 'regression_data', kwargs['model_splits'], 'train',\
+                                                   'batchSize'
+                                                   
+    predict = True
+    mpd = 'test_cfbstats-com-2005-1-5-0_372932b6-b313-11e9-92cd-b8975a6ac69a'
     for f in fcs:
         ec, dirs = f
         for d in dirs:
             sea_data = asd[d]
             ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
             split = ms[d][ec[dk][sf]][ec[dk][sp]]
-            norm_feats, norm_labels = [z_scores(data={k: sea_data[reg_d][0][k] for k in sea_data[nd].keys()}), 
-                                                           z_score_labels(labels=sea_data[reg_d][1])]
+            norm_labels, lab_mean, lab_std = z_score_labels(labels=sea_data[reg_d][1])
+            norm_feats = z_scores(data={k: sea_data[reg_d][0][k] for k in sea_data[nd].keys()})
             train, test = split_model_data(data_split=split, model_data=(norm_feats, norm_labels, sea_data[reg_d][-1]))
             np_train, np_test = cast_to_nparray(lis=list(train)), cast_to_nparray(lis=list(test))
             for i in range(ec[rps]):
-                run_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], features=sea_data[fs], 
-                          estimator_config=ec, train_data=np_train, test_data=np_test)
+                model, train_spec, eval_spec = create_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], 
+                                                            features=sea_data[fs], estimator_config=ec, train_data=np_train, 
+                                                            test_data=np_test, model_pred_dir=mpd if mpd else None)
+                if predict:                    
+                    compare = compare_pred_scores(pred_scores=scores_from_network(net_out=model_predict(model=model, 
+                                        features=test[0], labels=test[1], batch_size=ec[t][bs]), mean=lab_mean, 
+                                        stddev=lab_std), 
+                                        gids=split[1], 
+                                        original_labels=map(lambda s: list(s), da.reverse_zscores(data=map(lambda s: np.array(s), test[1]), mean=lab_mean, stddev=lab_std)),
+                                        mean=lab_mean, stddev=lab_std)
+
+                    for c, v in compare.iteritems():
+                        print((c, v))
+                else:
+                    tf.estimator.train_and_evaluate(model, train_spec, eval_spec)
+                
 
 def model_data_splits(**kwargs):
     file_cs, sp, sf, dk, sea_data, h = kwargs['file_configs'], 'splitPercent', 'splitFunction', 'data', kwargs['season_data'], 'histo'
