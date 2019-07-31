@@ -652,9 +652,7 @@ def compare_pred_scores(**kwargs):
 
     comps = {}
     for i, s in enumerate(ps):
-        print(gids[i])
-        #comps[gids[i]] = {'hey': [1, 2]}
-        comps[gids[i]] = {'predictions': s, 'label': og_lab[i], 'distance': np.abs(np.array(og_lab[i]) - np.array(s)),
+        comps[gids[i]] = {'predictions': s, 'actual': og_lab[i], 'distance': np.abs(np.array(og_lab[i]) - np.array(s)),
                           'correct': s.index(max(s)) == og_lab[i].index(max(og_lab[i]))}
 
     return comps
