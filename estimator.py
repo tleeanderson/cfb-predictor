@@ -669,14 +669,12 @@ def evaluate_models(**kwargs):
     
     Returns: None
     """
-    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d, ms, t, bs = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
+    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d, ms, t, bs, mpd = kwargs['file_configs'], kwargs['sea_dirs'], 'run_dir',\
                                                    kwargs['all_sea_data'], 'splitPercent', 'data', 'histo',\
                                                    'team_avgs', 'labels', 'features', 'model_sub_dir', 'splitFunction',\
                                                    'runsPerSeason', 'norm_data', 'regression_data', kwargs['model_splits'], 'train',\
-                                                   'batchSize'
-                                                   
-    predict = True
-    mpd = 'test_cfbstats-com-2005-1-5-0_372932b6-b313-11e9-92cd-b8975a6ac69a'
+                                                   'batchSize', kwargs['model_predict_dir']
+
     for f in fcs:
         ec, dirs = f
         for d in dirs:
@@ -691,7 +689,7 @@ def evaluate_models(**kwargs):
                 model, train_spec, eval_spec = create_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], 
                                                             features=sea_data[fs], estimator_config=ec, train_data=np_train, 
                                                             test_data=np_test, model_pred_dir=mpd if mpd else None)
-                if predict:                    
+                if mpd:                    
                     compare = compare_pred_scores(pred_scores=scores_from_network(net_out=model_predict(model=model, 
                                         features=test[0], labels=test[1], batch_size=ec[t][bs]), mean=lab_mean, 
                                         stddev=lab_std), 
@@ -725,6 +723,7 @@ def model_data_splits(**kwargs):
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
     parser.add_argument('--estimator_configs', nargs='+', required=True, help='List of model configs')
+    parser.add_argument('--model_predict_dir', required=False, help='Run a model in prediction mode')
     args = parser.parse_args() 
     cf = 'config'
     dc = '.' + cf
@@ -746,7 +745,7 @@ def main(args):
         util.print_cache_reads(coll=cs, data_origin=DATA_CACHE_DIR)
         splits = model_data_splits(file_configs=map(lambda f: (f[0], sea_dirs[f[0]], f[-1][cf]), file_configs), season_data=sea_data)
         evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs), sea_dirs=sea_dirs, 
-                        all_sea_data=sea_data, model_splits=splits)
+                        all_sea_data=sea_data, model_splits=splits, model_predict_dir=path.abspath(args.model_predict_dir))
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)
