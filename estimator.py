@@ -23,6 +23,7 @@ TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
 TRAIN_STEPS = 3000
 DATA_CACHE_DIR = path.join(util.DATA_CACHE_DIR, 'estimator')
+PREDICTION_DIR = 'prediction'
 
 def averages(**kwargs):
     """Computes averages for both teams in all games in team_game_stats.
@@ -643,14 +644,45 @@ def scores_from_network(**kwargs):
     return scores
 
 def compare_pred_scores(**kwargs):
-    ps, gids, og_lab = kwargs['pred_scores'], kwargs['gids'], kwargs['original_labels']
+    ps, gids, og_lab, pk, ak, dk, ck = kwargs['pred_scores'], kwargs['gids'], kwargs['original_labels'], kwargs['pred_key'],\
+                                       kwargs['actual_key'], kwargs['distance_key'], kwargs['correct_key']
 
     comps = {}
     for i, s in enumerate(ps):
-        comps[gids[i]] = {'predictions': s, 'actual': og_lab[i], 'distance': np.abs(np.array(og_lab[i]) - np.array(s)),
-                          'correct': s.index(max(s)) == og_lab[i].index(max(og_lab[i]))}
+        comps[gids[i]] = {pk: s, ak: og_lab[i], dk: np.abs(np.array(og_lab[i]) - np.array(s)),
+                          ck: s.index(max(s)) == og_lab[i].index(max(og_lab[i]))}
 
     return comps
+
+def prediction_summary(**kwargs):
+    pc, pk, ak, dk, ck, std, m = kwargs['pred_comparisons'], kwargs['pred_key'], kwargs['actual_key'],\
+                         kwargs['distance_key'], kwargs['correct_key'], kwargs['stddev'], kwargs['mean']
+
+    len_pc = len(pc)
+    corr = len(filter(lambda gid: pc[gid][ck], pc))
+
+    return {'stddev_of_points': std, 'mean_of_points': m, 'num_predictions': len_pc, 'percent_correct': corr / float(len_pc), 
+            'correct': corr, 'incorrect': len_pc - corr, 
+            'average_distance_by_team': sum(map(lambda gid: sum(pc[gid][dk]), pc)) / len_pc}    
+
+def output_prediction_summary(**kwargs):
+    comp, pred_sum, fn, fd = kwargs['pred_comparisons'], kwargs['pred_summary'], kwargs['file_name'], kwargs['file_dir']
+
+    pred_dir = path.abspath(fd)
+    if not path.exists(pred_dir):
+        os.makedirs(pred_dir)
+
+    fp = path.join(pred_dir, fn)
+    with open(fp, 'w') as fh:
+        for gid, pred in comp.iteritems():
+            fh.write(str((gid, pred)) + "\n")
+        pred_sum_keys = sorted(pred_sum.keys())
+        fh.write("\nSummary: \n")
+        for k in pred_sum_keys:
+            fh.write("\t%s: %s\n" % (str(k), str(pred_sum[k])))
+        fh.write("\n")
+
+    print("Output can be seen in %s file" % (str(fp)))    
 
 def evaluate_models(**kwargs):
     """Evalutes models by taking in associated data and computing splits before executing the 
@@ -684,18 +716,20 @@ def evaluate_models(**kwargs):
                 model, train_spec, eval_spec = create_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], 
                                                             features=sea_data[fs], estimator_config=ec, train_data=np_train, 
                                                             test_data=np_test, model_pred_dir=mpd if mpd else None)
-                if mpd:                    
-                    compare = compare_pred_scores(pred_scores=scores_from_network(net_out=model_predict(model=model, 
-                                        features=test[0], labels=test[1], batch_size=ec[t][bs]), mean=lab_mean, 
-                                        stddev=lab_std), 
-                                        gids=test[2], 
+                if mpd:           
+                    key_args = {'pred_key': 'predictions', 'actual_key': 'actual', 'distance_key': 'distance', 
+                                'correct_key': 'correct'}
+                    pred = model_predict(model=model, features=test[0], labels=test[1], batch_size=ec[t][bs])
+                    net_scores = scores_from_network(net_out=pred, mean=lab_mean, stddev=lab_std)
+                    compare = compare_pred_scores(pred_scores=net_scores, gids=test[2], 
                                         original_labels=map(lambda s: list(s), 
                                                             da.reverse_zscores(data=map(lambda s: np.array(s), test[1]), 
                                                                                mean=lab_mean, stddev=lab_std)),
-                                        mean=lab_mean, stddev=lab_std)
-
-                    for c, v in compare.iteritems():
-                        print((c, v))
+                                        mean=lab_mean, stddev=lab_std, **key_args)
+                    output_prediction_summary(pred_comparisons=compare, 
+                                              pred_summary=prediction_summary(pred_comparisons=compare, 
+                                                                                    mean=lab_mean, stddev=lab_std, **key_args), 
+                                              file_name=path.basename(mpd) + str('-predict.out'), file_dir=PREDICTION_DIR)
                 else:
                     tf.estimator.train_and_evaluate(model, train_spec, eval_spec)               
 

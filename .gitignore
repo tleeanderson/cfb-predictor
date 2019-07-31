@@ -5,3 +5,4 @@ accuracy_analysis
 model_out
 *_pb2.py
 data_cache
+prediction
