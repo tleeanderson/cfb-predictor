@@ -540,11 +540,6 @@ def create_model(**kwargs):
 
     return model, train_spec, eval_spec
 
-def train_and_evaluate(**kwargs):
-    m, train_sp, eval_sp = kwargs['model'], kwargs['train_sp'], kwargs['eval_sp']
-
-    tf.estimator.train_and_evaluate(model, train_sp, eval_sp)
-
 def season_dirs(**kwargs):
     """Each config specifies a pattern and this function resolves 
        that pattern against disk and associates the output with 
@@ -618,12 +613,12 @@ def split_model_data(**kwargs):
 
     gid_to_ind = {v: i for i, v in enumerate(games)}
     train_inds, test_inds = map(lambda gids: map(lambda g: gid_to_ind[g], gids), (train, test))
+    train_gids, test_gids = map(lambda inds: map(lambda i: games[i], inds), (train_inds, test_inds))
     train_lab, test_lab = map(lambda inds: map(lambda i: lab[i], inds), (train_inds, test_inds))
-
     train_feat = {k: map(lambda i: feat[k][i], train_inds) for k in feat.keys()}
     test_feat = {k: map(lambda i: feat[k][i], test_inds) for k in feat.keys()}
 
-    return ((train_feat, train_lab), (test_feat, test_lab))
+    return ((train_feat, train_lab, train_gids), (test_feat, test_lab, test_gids))
 
 def model_predict(**kwargs):
     m, feat, lab, bs = kwargs['model'], kwargs['features'], kwargs['labels'],\
@@ -684,7 +679,7 @@ def evaluate_models(**kwargs):
             norm_labels, lab_mean, lab_std = z_score_labels(labels=sea_data[reg_d][1])
             norm_feats = z_scores(data={k: sea_data[reg_d][0][k] for k in sea_data[nd].keys()})
             train, test = split_model_data(data_split=split, model_data=(norm_feats, norm_labels, sea_data[reg_d][-1]))
-            np_train, np_test = cast_to_nparray(lis=list(train)), cast_to_nparray(lis=list(test))
+            np_train, np_test = cast_to_nparray(lis=[train[0], train[1]]), cast_to_nparray(lis=[test[0], test[1]])
             for i in range(ec[rps]):
                 model, train_spec, eval_spec = create_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], 
                                                             features=sea_data[fs], estimator_config=ec, train_data=np_train, 
@@ -693,15 +688,16 @@ def evaluate_models(**kwargs):
                     compare = compare_pred_scores(pred_scores=scores_from_network(net_out=model_predict(model=model, 
                                         features=test[0], labels=test[1], batch_size=ec[t][bs]), mean=lab_mean, 
                                         stddev=lab_std), 
-                                        gids=split[1], 
-                                        original_labels=map(lambda s: list(s), da.reverse_zscores(data=map(lambda s: np.array(s), test[1]), mean=lab_mean, stddev=lab_std)),
+                                        gids=test[2], 
+                                        original_labels=map(lambda s: list(s), 
+                                                            da.reverse_zscores(data=map(lambda s: np.array(s), test[1]), 
+                                                                               mean=lab_mean, stddev=lab_std)),
                                         mean=lab_mean, stddev=lab_std)
 
                     for c, v in compare.iteritems():
                         print((c, v))
                 else:
-                    tf.estimator.train_and_evaluate(model, train_spec, eval_spec)
-                
+                    tf.estimator.train_and_evaluate(model, train_spec, eval_spec)               
 
 def model_data_splits(**kwargs):
     file_cs, sp, sf, dk, sea_data, h = kwargs['file_configs'], 'splitPercent', 'splitFunction', 'data', kwargs['season_data'], 'histo'
@@ -745,7 +741,8 @@ def main(args):
         util.print_cache_reads(coll=cs, data_origin=DATA_CACHE_DIR)
         splits = model_data_splits(file_configs=map(lambda f: (f[0], sea_dirs[f[0]], f[-1][cf]), file_configs), season_data=sea_data)
         evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs), sea_dirs=sea_dirs, 
-                        all_sea_data=sea_data, model_splits=splits, model_predict_dir=path.abspath(args.model_predict_dir))
+                        all_sea_data=sea_data, model_splits=splits, 
+                        model_predict_dir=path.abspath(args.model_predict_dir) if args.model_predict_dir else None)
 
 if __name__ == '__main__':
     tf.logging.set_verbosity(tf.logging.INFO)
