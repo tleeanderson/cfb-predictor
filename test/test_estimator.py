@@ -54,10 +54,13 @@ def test_regression_data():
 def test_zscore_labels():
     labels = [[i, i + 1] for i in range(10)]
     bad_labels = [[1, 2], [3], [4, 5]]
+    lab_avg, lab_std = np.average(labels), np.std(labels)
 
-    out = est.z_score_labels(labels=labels)
+    out, out_avg, out_std = est.z_score_labels(labels=labels)
     
     assert({2} == set(map(lambda ls: len(ls), labels)))
+    assert(lab_avg == out_avg)
+    assert(lab_std == out_std)
     try:
         _ = est.z_score_labels(labels=bad_labels)
     except ValueError:
@@ -105,3 +108,67 @@ def test_static_split_data():
     _test_split(train=train_2, test=test_2, exp_total=exp_total)
     assert(train == train_2)
     assert(test == test_2)
+
+def test_split_model_data():
+    gid_1, gid_2, gid_3, gid_4, f1, f2 = 'gid1', 'gid2', 'gid3', 'gid4', 'f1', 'f2'
+    sp1, sp2, l1, l2, l3, l4, l5, l6, l7, l8 = [gid_1, gid_2], [gid_3, gid_4], 1, 2, 3, 4, 5, 6, 7, 8
+    feat, lab = {f1: range(4), f2: range(4)}, [[l1, l2], [l3, l4], [l5, l6], [l7, l8]] 
+    games = [gid_1, gid_2, gid_3, gid_4]
+
+    t1, t2 = est.split_model_data(data_split=(sp1, sp2), model_data=(feat, lab, games))
+    
+    assert(({f1: range(2), f2: range(2)}, [[l1, l2], [l3, l4]], sp1) == (t1[0], t1[1], t1[2]))
+    assert(({f1: range(2, 4), f2: range(2, 4)}, [[l5, l6], [l7, l8]], sp2) == (t2[0], t2[1], t2[2]))
+
+def test_compare_pred_scores():
+    pk, ak, dk, ck = 'predictions', 'actual', 'distance', 'correct'
+    key_args = {'pred_key': pk, 'actual_key': ak , 'distance_key': dk, 'correct_key': ck}
+    s1, s2, s3, s4, gid_1, gid_2, l1, l2, l3, l4 = 1, 2, 3, 4, 'gid1', 'gid2', 5, 6, 7, 8
+    pred_scores, gids, ol = [[s1, s2], [s3, s4]], [gid_1, gid_2], [[l1, l2], [l4, l3]]
+ 
+    out = est.compare_pred_scores(pred_scores=pred_scores, gids=gids, 
+                            original_labels=ol, **key_args)
+
+    assert({gid_1, gid_2} == set(out.keys()))
+    assert({pk: pred_scores[0], ak: ol[0], dk: [4, 4], ck: True} == out[gid_1])
+    assert({pk: pred_scores[1], ak: ol[1], dk: [5, 3], ck: False} == out[gid_2])
+
+def test_prediction_summary():
+    dk, ck = 'distance', 'correct'
+    key_args = {'distance_key': dk, 'correct_key': ck}
+    stddev, mean, gid_1, gid_2 = 1.0, 4.5, 'gid1', 'gid2'
+    pred_comparisons = {gid_1: {ck: True, dk: [1, 1]}, gid_2: {ck: False, dk: [1, 1]}}
+    out_std, out_m, out_np = 'stddev_of_points', 'mean_of_points', 'num_predictions'
+    out_pc, out_c, out_ic, out_adbt = 'percent_correct', 'correct', 'incorrect',\
+                                      'average_distance_by_team'
+                             
+    out = est.prediction_summary(pred_comparisons=pred_comparisons, distance_key=dk, 
+                                 correct_key=ck, stddev=stddev, mean=mean)
+
+    assert(stddev == out[out_std])
+    assert(mean == out[out_m])
+    assert(2 == out[out_np])
+    assert(0.5 == out[out_pc])
+    assert(1 == out[out_c])
+    assert(1 == out[out_ic])
+    assert(1 == out[out_adbt])
+
+def test_model_data_splits():
+    d1, d2, stoch, static, sp1 = 'd1', 'd2', 'stochastic', 'static', 0.78
+    sep, octo, nov, dk, sfk, spk, h = '09/01/2005', '10/01/2005', '11/01/2005', 'data', 'splitFunction',\
+                                   'splitPercent', 'histo'
+    game_histo = {sep: range(10), octo: range(10, 20), nov: range(20, 30)}
+    sea_data = {d1: {h: game_histo}, d2: {h: game_histo}}
+    exp_total = sum(map(lambda r: len(game_histo[r]), game_histo))
+    file_configs = [('', [d1, d2], {dk: {sfk: stoch, spk: sp1}}), 
+                    ('', [d1, d2], {dk: {sfk: static, spk: sp1}})]
+
+    out = est.model_data_splits(file_configs=file_configs, season_data=sea_data)    
+
+    assert({d1, d2} == set(out.keys()))
+    assert({stoch, static} == set(np.reshape(map(lambda d: out[d].keys(), out), [-1])))
+    assert({sp1} == set(np.reshape(map(lambda d: map(lambda sf: out[d][sf].keys(), out[d]), out), [-1])))
+    for d, dv in out.iteritems():
+        for sf, sfv in dv.iteritems():
+            for sp, split in sfv.iteritems():
+                _test_split(train=split[0], test=split[1], exp_total=exp_total)    
