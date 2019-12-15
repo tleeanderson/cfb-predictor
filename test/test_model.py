@@ -38,7 +38,7 @@ def test_predict():
                                       const.WINNER, 'tie'
     ta = {tid_1: {ps: v1}, tid_2: {ps: v2}}
 
-    out = model.predict(team_avgs=ta, game_code_id='1', tg_stats={}, eval_func=ef)
+    out = model.predict(team_avgs=ta, eval_func=ef)
     
     assert(out[w] == tid_2)
     assert(out[t] == False)
@@ -46,7 +46,7 @@ def test_predict():
     try:
         bad_ta = {k: ta[k] for k in ta.keys()}
         bad_ta.update({'8': {ps: v1}})
-        model.predict(team_avgs=bad_ta, game_code_id='1', tg_stats={}, eval_func=ef)
+        model.predict(team_avgs=bad_ta, eval_func=ef)
     except ValueError:
         assert(True)
     else:
