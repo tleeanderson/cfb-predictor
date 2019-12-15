@@ -10,7 +10,7 @@ import numpy as np
 #low for all tests, but I am unsure why at this point.
 SW_NORM_THRESHOLD = 0.80
 
-def reorder(**kwargs):
+def reorder(features):
     """Orders features such that -0 feature follows -1 feature
 
     Args:
@@ -20,30 +20,29 @@ def reorder(**kwargs):
              and the second is any features where a matching feature could 
              not be found
     """
-    fs = kwargs['features']
 
     res = []
     no_match = []
-    for field in filter(lambda x: '-0' in x, set(fs.keys())):
+    for field in filter(lambda x: '-0' in x, set(features.keys())):
         lis = filter(lambda e: e[0 : len(e) - 2] == field[0 : len(field) - 2], 
-                     filter(lambda x: '-1' in x, set(fs.keys())))
+                     filter(lambda x: '-1' in x, set(features.keys())))
         if len(lis) == 1:
-            res.append((field, fs[field]))
-            res.append((lis[0], fs[lis[0]]))
+            res.append((field, features[field]))
+            res.append((lis[0], features[lis[0]]))
         else:
             no_match.append(field)
 
     return res, no_match
 
-def histogram(**kwargs):
+def histogram(avgs, team_stats):
     """Draws a histogram plot for each field in avgs
 
     Args: 
          avgs: Averages for each team in each game
+         team_stats: stats for each team
 
     Returns: None
     """
-    avgs, team_stats = kwargs['avgs'], kwargs['team_stats']
 
     fields, _ = est.input_data(game_averages=avgs, labels=tgs.add_labels(team_game_stats=team_stats))
 
@@ -59,7 +58,7 @@ def histogram(**kwargs):
 
     plt.show()
 
-def shapiro_wilk(**kwargs):
+def shapiro_wilk(distributions):
     """Computes the shapiro wilk statistical test for a given map of distributions
 
     Args:
@@ -68,15 +67,14 @@ def shapiro_wilk(**kwargs):
    
     Returns: map of field name to shapiro wilk score
     """
-    dist = kwargs['distributions']
 
     result = {}
-    for k, d in dist.iteritems():
+    for k, d in distributions.iteritems():
         result[k] = shapiro(d)
     
     return result
 
-def similar_field(**kwargs):
+def similar_field(field, all_fields):
     """Given a field and a collection of fields, finds the corresponding
        field by checking equality of the first n - 2 characters
 
@@ -86,12 +84,11 @@ def similar_field(**kwargs):
     
     Returns: the first matching field if one is found, otherwise None
     """
-    f, afs = kwargs['field'], kwargs['all_fields']
 
-    res = filter(lambda e: e[0 : len(e) - 2] == f[0 : len(f) - 2], afs)
+    res = filter(lambda e: e[0 : len(e) - 2] == field[0 : len(field) - 2], all_fields)
     return res[0] if res else None
 
-def normality_filter(**kwargs):
+def normality_filter(shapiro_wilk, threshold):
     """Given shapiro wilk scores and a threshold, filters distributions
        according to their shaprio wilk statistical value being greater 
        than or equal to the given threshold. Note this function will 
@@ -104,17 +101,16 @@ def normality_filter(**kwargs):
 
     Returns: map of fields to their shapiro wilk scores
     """
-    sw, th = kwargs['shapiro_wilk'], kwargs['threshold']
-    
+
     result = {}
-    for f, val in filter(lambda i: '-0' in i[0], set(sw.iteritems())):
-        sf = similar_field(field=f, all_fields=filter(lambda k: '-1' in k, set(sw.keys())))
-        if sf and (sw[sf][0] >= th or val[0] >= th):
+    for f, val in filter(lambda i: '-0' in i[0], set(shapiro_wilk.iteritems())):
+        sf = similar_field(field=f, all_fields=filter(lambda k: '-1' in k, set(shapiro_wilk.keys())))
+        if sf and (shapiro_wilk[sf][0] >= threshold or val[0] >= threshold):
             result[f] = val
-            result[sf] = sw[sf]    
+            result[sf] = shapiro_wilk[sf]
     return result
 
-def normal_dists(**kwargs):
+def normal_dists(field_avgs):
     """Computes shapiro wilk scores for a given set of averages 
        or distributions and returns a filtered set of those distributions
        by their shapiro wilk scores
@@ -124,14 +120,13 @@ def normal_dists(**kwargs):
     
     Returns: map of fields to their shapiro wilk scores
     """
-    f_avgs = kwargs['field_avgs']
-        
-    sw = shapiro_wilk(distributions=f_avgs)
+
+    sw = shapiro_wilk(distributions=field_avgs)
     norms = normality_filter(shapiro_wilk=sw, threshold=SW_NORM_THRESHOLD)
     
     return norms
 
-def z_scores_args(**kwargs):
+def z_scores_args(data, mean, stddev):
     """Computes zscores for given data, based off of a given mean and
        stddev
 
@@ -142,11 +137,10 @@ def z_scores_args(**kwargs):
 
     Returns: zscores of data
     """
-    data, mean, stddev = kwargs['data'], kwargs['mean'], kwargs['stddev']
-    
+
     return map(lambda d: (d - mean) / stddev, data)
 
-def z_scores(**kwargs):
+def z_scores(data):
     """Computes zscores for given data, based off of a mean and stddev
        derived from data 
 
@@ -155,11 +149,10 @@ def z_scores(**kwargs):
 
     Returns: zscores of data
     """
-    data = kwargs['data']
 
     return z_scores_args(**{'data': data, 'mean': np.average(data), 'stddev': np.std(data)})
 
-def reverse_zscores(**kwargs):
+def reverse_zscores(data, mean, stddev):
     """Reverses zscores for given data, based off of a given mean and
        stddev
 
@@ -170,6 +163,5 @@ def reverse_zscores(**kwargs):
 
     Returns: original values of data
     """
-    data, mean, stddev = kwargs['data'], kwargs['mean'], kwargs['stddev']
     
     return map(lambda v: v * stddev + mean, data)
