@@ -6,7 +6,7 @@ import os.path as path
 
 FILE_NAME = 'game.csv'
 
-def csv_to_map(**kwargs):
+def csv_to_map(csv_reader):
     """For a given list of maps in csv_reader, maps a game code id to 
        each map with the game code id removed from each map
 
@@ -15,16 +15,15 @@ def csv_to_map(**kwargs):
     
     Returns: map of game code ids to values
     """
-    csv_reader = kwargs['csv_reader']
-    result = {}
 
+    result = {}
     for row in csv_reader:
         game_code_id = 'Game Code'
         result[row[game_code_id]] = {k: row[k] for k in set(row.keys())
                            .difference({game_code_id})}
     return result
 
-def seasons_by_game_code(**kwargs):
+def seasons_by_game_code(game_code_id, games):
     """Given a game_code_id and map of games, returns the games of
        teams that are in game_code_id
 
@@ -34,13 +33,11 @@ def seasons_by_game_code(**kwargs):
     
     Returns: map of team ids to their games
     """
-    game_code_id, games = kwargs['game_code_id'], kwargs['games']
-    visit_team, home_team = 'Visit Team Code', 'Home Team Code'
 
+    visit_team, home_team = 'Visit Team Code', 'Home Team Code'
     games_by_team = {}
     games_by_team[games[game_code_id][visit_team]] = {}
     games_by_team[games[game_code_id][home_team]] = {}
-
     for gid, game_info in games.iteritems():
         if game_info[visit_team] in games_by_team:
             games_by_team[game_info[visit_team]][gid] = util.subset_of_map(full_map=game_info, 
@@ -50,7 +47,7 @@ def seasons_by_game_code(**kwargs):
                                                                            take_out_keys={'Game Code'})
     return games_by_team
 
-def subseason(**kwargs):
+def subseason(team_games, game_code_id, compare):
     """Returns a subset of the games in team_games according to
        a game_code_id and comparison operator
 
@@ -64,8 +61,7 @@ def subseason(**kwargs):
     Raises:
            ValueError: if game_code_id is not in team_games
     """
-    team_games, game_code_id, compare, date = kwargs['team_games'], kwargs['game_code_id'],\
-                                              kwargs['compare'], 'Date'
+    date = 'Date'
     
     if game_code_id in team_games:
         lis = map(lambda e: (e[0], du.parse(e[-1][date])), team_games.iteritems())
@@ -74,7 +70,7 @@ def subseason(**kwargs):
     else:
         raise ValueError("%s id was not in %s" % (str(game_code_id), str(team_games)))
 
-def game_stats(**kwargs):
+def game_stats(directory):
     """Reads in data from a game.csv file
 
     Args:
@@ -82,10 +78,8 @@ def game_stats(**kwargs):
     
     Returns: a map of game data
     """
-    input_directory = kwargs['directory']
 
-    game_file = path.join(input_directory, FILE_NAME)
+    game_file = path.join(directory, FILE_NAME)
     game_data = util.read_file(input_file=game_file, func=csv_to_map)
-    
     return game_data
     
