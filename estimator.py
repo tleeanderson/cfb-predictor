@@ -25,7 +25,7 @@ TRAIN_STEPS = 3000
 DATA_CACHE_DIR = path.join(util.DATA_CACHE_DIR, 'estimator')
 PREDICTION_DIR = 'prediction'
 
-def averages(**kwargs):
+def averages(team_game_stats, game_infos, skip_fields):
     """Computes averages for both teams in all games in team_game_stats.
 
     Args:
@@ -35,8 +35,6 @@ def averages(**kwargs):
     
     Returns: tuple of game avgs and game ids that could not be averaged
     """
-    team_game_stats, game_infos, skip_fields = kwargs['team_game_stats'], kwargs['game_infos'],\
-                                               kwargs['skip_fields']
 
     game_avgs = {}
     no_avgs = []
@@ -51,7 +49,7 @@ def averages(**kwargs):
         
     return game_avgs, no_avgs
 
-def binary_classification_data(**kwargs):
+def binary_classification_data(game_averages, labels):
     """(Deprecated) Creates input for binary classification model. Each 
        example is organized such that each column represents the input
        and the corresponding index in labels is the output.       
@@ -62,11 +60,10 @@ def binary_classification_data(**kwargs):
     
     Returns: tuple of features and labels
     """
-    game_avgs, input_labels = kwargs['game_averages'], kwargs['labels']
 
     features = {}
     labels = []
-    for gid, team_avgs in game_avgs.iteritems():
+    for gid, team_avgs in game_averages.iteritems():
         for ta, feature_team_id, fid in zip(team_avgs.iteritems(), ['-0', '-1'], [0, 1]):
             tid, stats = ta
             for name, value in stats.iteritems():
@@ -82,7 +79,7 @@ def binary_classification_data(**kwargs):
 
     return features, np.array(labels)
 
-def regression_data(**kwargs):
+def regression_data(game_averages, labels):
     """Creates input for regression model. Each example is organized
        such that each column represents the input and the corresponding
        index in labels is the output. Each label has shape [2] and each
@@ -94,12 +91,13 @@ def regression_data(**kwargs):
     
     Returns: tuple of features and labels
     """
-    game_avgs, input_labels, ps, w = kwargs['game_averages'], kwargs['labels'], 'Points', 'Winner'
-
+    
+    ps = 'Points'
+    w = 'Winner'
     features = {}
-    labels = []
+    out_labels = []
     game_ids = []
-    for gid, team_avgs in game_avgs.iteritems():
+    for gid, team_avgs in game_averages.iteritems():
         for ta, feature_team_id in zip(team_avgs.iteritems(), ['-0', '-1']):
             tid, stats = ta
             for name, value in stats.iteritems():
@@ -107,12 +105,12 @@ def regression_data(**kwargs):
                 if stat_key not in features:
                     features[stat_key] = []
                 features[stat_key].append(value)
-        labels.append(map(lambda tk: input_labels[gid][w][tk], team_avgs.keys()))
+        out_labels.append(map(lambda tk: labels[gid][w][tk], team_avgs.keys()))
         game_ids.append(gid)
 
-    return [features, labels, tuple(game_ids)]
+    return [features, out_labels, tuple(game_ids)]
 
-def cast_to_nparray(**kwargs):
+def cast_to_nparray(lis):
     """Casts input elements to nparrays.
 
     Args:
@@ -120,7 +118,6 @@ def cast_to_nparray(**kwargs):
     
     Returns: lis of nparray types
     """
-    lis = kwargs['lis']
     
     for k in lis[0].keys():
         lis[0][k] = np.array(lis[0][k])
@@ -129,7 +126,7 @@ def cast_to_nparray(**kwargs):
 
     return lis
 
-def z_score_labels(**kwargs):
+def z_score_labels(labels):
     """zscores an input with shape [n, 2]. If a different shape
        is given, an error will be thrown. Average and standard 
        deviation are derived from the input by numpy.
@@ -142,7 +139,6 @@ def z_score_labels(**kwargs):
     Raises:
            ValueError: if input shape is not [n, 2]
     """
-    labels = kwargs['labels']
 
     flat = reduce(lambda l1,l2: l1 + l2, labels)
     if len(flat) % 2 == 0:        
@@ -153,7 +149,7 @@ def z_score_labels(**kwargs):
     else:
         raise ValueError("Labels must have shape [n, 2]")
 
-def histogram_games(**kwargs):
+def histogram_games(game_infos, game_stats, histo_key):
     """Creates a histogram of game ids by a given value. The corresponding
        key is used for lookups in game_infos.
 
@@ -164,7 +160,6 @@ def histogram_games(**kwargs):
     
     Returns: 
     """
-    game_infos, game_stats, histo_key = kwargs['game_infos'], kwargs['game_stats'], kwargs['histo_key']
 
     histo = {}
     for gid in game_stats:
@@ -175,7 +170,7 @@ def histogram_games(**kwargs):
     
     return histo
 
-def stochastic_split_data(**kwargs):
+def stochastic_split_data(game_histo, split_percentage):
     """Computes a randomized split of data by some percentage. Note, this
        function will produce different outputs for the same input as
        index generation is randomized. The split will tend to
@@ -189,12 +184,11 @@ def stochastic_split_data(**kwargs):
     
     Returns: tuple of lists
     """
-    gh, sp = kwargs['game_histo'], float(kwargs['split_percentage'])
 
     train = []
     test = []
     train_divi = True
-    for k, games in gh.iteritems():
+    for k, games in game_histo.iteritems():
         count = len(games)
         if count == 1:
             if train_divi:
@@ -208,7 +202,7 @@ def stochastic_split_data(**kwargs):
             train.append(games[num])
             test.append(games[int(not num)])
         else:
-            train_split = int(round(count * sp))
+            train_split = int(round(count * split_percentage))
             test_split = count - train_split
             if test_split == 0:
                 train_split = int(math.ceil(float(count) / 2))
@@ -220,7 +214,7 @@ def stochastic_split_data(**kwargs):
 
     return train, test
 
-def static_split_data(**kwargs):
+def static_split_data(game_histo, split_percentage):
     """Computes a deterministic split of data. Given the same input, this
        function will produce the same output. The split may be slightly
        different from the specified percentage due to rounding logic.
@@ -233,43 +227,42 @@ def static_split_data(**kwargs):
 
     Returns: tuple of lists
     """
-    gh, sp = kwargs['game_histo'], float(kwargs['split_percentage'])
 
     train = []
     test = []
     train_divi = True
-    keys = list(gh.keys())
+    keys = list(game_histo.keys())
     keys.sort(key=lambda x: du.parse(x))
     for d in keys:
-        count = len(gh[d])
+        count = len(game_histo[d])
         k = d
         if count == 1:
             if train_divi:
-                train.append(gh[d][0])
+                train.append(game_histo[d][0])
                 train_divi = False
             else:
-                test.append(gh[d][0])
+                test.append(game_histo[d][0])
                 train_divi = True
         elif count == 2:
-            train.append(gh[d][0])
-            test.append(gh[d][1])
+            train.append(game_histo[d][0])
+            test.append(game_histo[d][1])
         else:
-            train_split = int(round(count * sp))
+            train_split = int(round(count * split_percentage))
             test_split = count - train_split
             if test_split == 0:
                 train_split = int(math.ceil(float(count) / 2))
-            num_games = len(gh[d])
+            num_games = len(game_histo[d])
             ind_range = set(range(num_games))
-            train_ind = set(range(int(math.floor(num_games * sp))))
+            train_ind = set(range(int(math.floor(num_games * split_percentage))))
             test_ind = ind_range.difference(train_ind)
-            train += [gh[d][e] for e in train_ind]
-            test += [gh[d][e] for e in test_ind] 
+            train += [game_histo[d][e] for e in train_ind]
+            test += [game_histo[d][e] for e in test_ind] 
 
     train.sort()
     test.sort()
     return train, test
 
-def stochastically_randomize_vector(**kwargs):
+def stochastically_randomize_vector(net, rate):
     """For a given rate, will randomize an input vector. The rate
        is used as a denominator, i.e. 1 / rate. So increases in rate 
        will decrease the likelihood of randomizing the input vector.
@@ -280,14 +273,14 @@ def stochastically_randomize_vector(**kwargs):
     
     Returns: tensor
     """
-    in_net, r = kwargs['net'], kwargs['rate']
+
     net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], 
-                                       maxval=int(r), dtype=tf.int32))[0], 
-                                       true_fn=lambda: tf.random_shuffle(gf), 
-                                       false_fn=lambda: gf), in_net)
+                                       maxval=int(rate), dtype=tf.int32))[0],
+                                       true_fn=lambda: tf.random_shuffle(gf),
+                                       false_fn=lambda: gf), net)
     return net
 
-def stochastically_randomize_half_vector(**kwargs):
+def stochastically_randomize_half_vector(net, rate, ub):
     """For a given rate, will randomize an half of an input vector. The rate
        is used as a denominator, i.e. 1 / rate. So increases in rate will
        decrease the likelihood of randomizing half of the input vector. The
@@ -301,18 +294,19 @@ def stochastically_randomize_half_vector(**kwargs):
     
     Returns: tensor
     """
-    in_net, r, ub = kwargs['net'], kwargs['rate'], kwargs['ub']
-    keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0], 
-                         true_fn=lambda: tf.range(0, ub / 2), 
+
+    keep_range = tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=2, dtype=tf.int32))[0],
+                         true_fn=lambda: tf.range(0, ub / 2),
                          false_fn=lambda: tf.range(ub / 2, ub))
     randomize_range = tf.sets.difference([tf.range(ub)], [keep_range]).values
-    net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), tf.random.uniform([1], maxval=r, dtype=tf.int32))[0], 
-                                           true_fn=lambda: tf.gather(gf, tf.concat([keep_range, 
+    net = tf.map_fn(lambda gf: tf.cond(tf.equal(tf.constant(0), 
+                                                tf.random.uniform([1], maxval=rate, dtype=tf.int32))[0],
+                                           true_fn=lambda: tf.gather(gf, tf.concat([keep_range,
                                            tf.random_shuffle(randomize_range)], axis=0)), 
-                                           false_fn=lambda: gf), in_net)
+                                           false_fn=lambda: gf), net)
     return net
 
-def randomize_vector(**kwargs):
+def randomize_vector(net):
     """Deterministically randomizes the whole input vector.
 
     Args:
@@ -320,10 +314,10 @@ def randomize_vector(**kwargs):
     
     Returns: tensor
     """
-    in_net = kwargs['net']
-    return tf.map_fn(lambda gf: tf.random_shuffle(gf), in_net)
 
-def mean_power_error(**kwargs):
+    return tf.map_fn(lambda gf: tf.random_shuffle(gf), net)
+
+def mean_power_error(labels, logits, power, weight):
     """Computes loss across an input batch of elements by 
        1 / n * (mult(pow(abs(x - y), power), weight)). 
 
@@ -335,13 +329,12 @@ def mean_power_error(**kwargs):
     
     Returns: average loss for batch
     """
-    labels, logits, p, w = kwargs['labels'], kwargs['logits'], kwargs['power'], kwargs['weight']
 
     return tf.math.reduce_mean(tf.map_fn(lambda i: tf.math.multiply(tf.math.pow(tf.math.abs(
-        tf.math.subtract(tf.gather(logits, i), tf.gather(labels, i))), p), w), 
+        tf.math.subtract(tf.gather(logits, i), tf.gather(labels, i))), power), weight),
                                          tf.range(tf.shape(logits)[0]), dtype=tf.float32))
 
-def mean_piecewise_power_error(**kwargs):
+def mean_piecewise_power_error(labels, logits, power_alpha, alpha, power):
     """Allows for two power functions to be used. If input is less than alpha,
        input is raised to power_alpha. Otherwise the input is raised to power.
        Loss is computed by 1 / n * (mult(abs(x - y), (power | power_alpha)))
@@ -355,24 +348,27 @@ def mean_piecewise_power_error(**kwargs):
     
     Returns: average loss for batch
     """
-    labels, logits, pa, a, p = kwargs['labels'], kwargs['logits'], kwargs['power_alpha'], kwargs['alpha'], kwargs['power']
 
     return tf.math.reduce_mean(tf.map_fn(lambda i: 
-                                        tf.map_fn(lambda s: tf.cond(tf.math.less(s, a), 
-                                        true_fn=lambda: tf.math.pow(s, pa), false_fn=lambda: tf.math.pow(s, p)), 
+                                        tf.map_fn(lambda s: tf.cond(tf.math.less(s, alpha), 
+                                        true_fn=lambda: tf.math.pow(s, power_alpha), 
+                                        false_fn=lambda: tf.math.pow(s, power)),
                                         tf.math.abs(tf.math.subtract(tf.gather(logits, i), 
                                         tf.gather(labels, i)))), tf.range(tf.shape(logits)[0]), dtype=tf.float32))
 
-def mean_absolute_error(**kwargs):
+def mean_absolute_error(labels, logits, power, power_alpha, weight, alpha):
     """Computes MAE on input batch.
 
     Args:
          labels: actual outcomes
          logits: scores from network
+         power: unused
+         power_alpha: unused
+         weight: unused
+         alpha: unused
     
     Returns: average loss for batch
     """
-    labels, logits = kwargs['labels'], kwargs['logits']
 
     return mean_power_error(labels=labels, logits=logits, power=1.0, weight=1.0)
 
@@ -395,11 +391,14 @@ def model_fn(features, labels, mode, params):
     
     Returns: estimator specification
     """
-    ec, fc, da, rf, r, do, hl, n, reg, act, ty, ol, lr, t, sc, lf, p, pa, a, w = params['estimator_config'],\
-                                                            params['feature_columns'], 'dataAugment', 'randomizerFunc',\
-                                                            'rate', 'dropout', 'hiddenLayer', 'neurons', 'regularization',\
-                                                            'activation', 'type', 'outputLayer', 'learningRate', 'train',\
-                                                            'scale', 'lossFunction', 'power', 'powerAlpha', 'alpha', 'weight'
+
+    ec, fc = params['estimator_config'], params['feature_columns']
+    da, rf, r, do = 'dataAugment', 'randomizerFunc', 'rate', 'dropout'
+    hl, n, reg, act = 'hiddenLayer', 'neurons', 'regularization', 'activation'
+    ty, ol, lr, t  = 'type', 'outputLayer', 'learningRate', 'train'
+    sc, lf, p, pa = 'scale', 'lossFunction', 'power', 'powerAlpha'
+    a, w = 'alpha', 'weight'
+
     hidden_layers = ec.get(hl)
     net = tf.feature_column.input_layer(features, params['feature_columns'])
 
@@ -485,7 +484,7 @@ def eval_input_fn(features, labels, batch_size):
     """
     return tf.data.Dataset.from_tensor_slices((features, labels)).batch(batch_size)
 
-def z_scores(**kwargs):
+def z_scores(data):
     """zscores values in given map.
 
     Args:
@@ -493,11 +492,11 @@ def z_scores(**kwargs):
     
     Returns: a map
     """
-    fs = kwargs['data']
     
-    return {f: da.z_scores(data=fs[f]) for f in fs.keys()}
+    return {f: da.z_scores(data=data[f]) for f in data.keys()}
 
-def create_model(**kwargs):
+def create_model(features, estimator_config, 
+                 train_data, test_data, model_pred_dir):
     """Creates train features, train labels, test features, and test labels 
        and executes model. The model is both trained and tested.
 
@@ -510,19 +509,17 @@ def create_model(**kwargs):
     
     Returns: None
     """
-    avgs, split, labels, feat, ec, t, scs, n, hl, md, ts, ets, bs, rd, tr, tst, mpd = kwargs['team_avgs'], kwargs['split'],\
-                                                                kwargs['labels'], kwargs['features'],\
-                                                                kwargs['estimator_config'], 'train',\
-                                                                'saveCheckpointsSteps', 'neurons',\
-                                                                'hiddenLayer', 'modelDir', 'trainSteps',\
-                                                                'evalThrottleSecs', 'batchSize', 'run_dir',\
-                                                                kwargs['train_data'], kwargs['test_data'],\
-                                                                kwargs['model_pred_dir']
+
+    ec = estimator_config
+    t, scs, n = 'train', 'saveCheckpointsSteps', 'neurons'
+    hl, md, ts = 'hiddenLayer', 'modelDir', 'trainSteps'
+    ets, bs, rd = 'evalThrottleSecs', 'batchSize', 'run_dir'
+    tr, tst, mpd = train_data, test_data, model_pred_dir
     train_features, train_labels = tr
     test_features, test_labels = tst
 
     feature_cols = []
-    for f in feat:
+    for f in features:
         feature_cols.append(tf.feature_column.numeric_column(key=f))
 
     model_dir = mpd if mpd else path.join(ec[t][md], "%s_%s" % (str(ec[rd]), str(uuid.uuid1()))) 
@@ -540,7 +537,7 @@ def create_model(**kwargs):
 
     return model, train_spec, eval_spec
 
-def season_dirs(**kwargs):
+def season_dirs(configs):
     """Each config specifies a pattern and this function resolves 
        that pattern against disk and associates the output with 
        the configuration file's name.
@@ -550,15 +547,15 @@ def season_dirs(**kwargs):
     
     Returns: tuple of map and set
     """
-    cs, d, dp = kwargs['configs'], 'data', 'directoryPattern'
+    d, dp = 'data', 'directoryPattern'
     
     result = {}
-    for c in cs:
+    for c in configs:
         result[c[0]] = glob.glob(c[1].get(d).get(dp))
 
     return result, set(reduce(lambda f1,f2: f1 + f2, result.values()))
 
-def read_config(**kwargs):
+def read_config(estimator_file):
     """Given a file, reads it in and maps its values to a protobuf object.
        The protobuf is then converted to a python dict and returned.
 
@@ -567,18 +564,17 @@ def read_config(**kwargs):
     
     Returns: map
     """
-    ef = kwargs['estimator_file']
 
     pb = estimator_pb2.Estimator()
     result = {}
-    with open(path.abspath(ef), 'rb') as fh:
+    with open(path.abspath(estimator_file), 'rb') as fh:
         proto_str = fh.read()
         text_format.Merge(proto_str, pb)
         result = MessageToDict(pb)
     
     return result
 
-def season_data(**kwargs):
+def season_data(dirs):
     """Computes data by season. Reads in values from team-game-statistics.csv and 
        game.csv and dervies more values.
 
@@ -587,10 +583,10 @@ def season_data(**kwargs):
     
     Returns: map
     """
-    ds, ps = kwargs['dirs'], 'Points'
 
+    ps = 'Points'
     result = {}
-    for season_dir in ds:
+    for season_dir in dirs:
         gs = game.game_stats(directory=season_dir)
         team_stats = tgs.team_game_stats(directory=season_dir)
         avgs, _ = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
@@ -606,7 +602,7 @@ def season_data(**kwargs):
 
     return result
 
-def split_model_data(**kwargs):
+def split_model_data(data_split, model_data):
     """Given a data split and input data for the model, computes a 
        split. Preserves the columnar ordering of the model_data. Also
        returns game ids alongside train and test splits.
@@ -617,9 +613,9 @@ def split_model_data(**kwargs):
     
     Returns: tuple of tuples
     """
-    split, md = kwargs['data_split'], kwargs['model_data']
-    feat, lab, games = md
-    train, test = split
+
+    feat, lab, games = model_data
+    train, test = data_split
 
     gid_to_ind = {v: i for i, v in enumerate(games)}
     train_inds, test_inds = map(lambda gids: map(lambda g: gid_to_ind[g], gids), (train, test))
@@ -630,7 +626,7 @@ def split_model_data(**kwargs):
 
     return ((train_feat, train_lab, train_gids), (test_feat, test_lab, test_gids))
 
-def model_predict(**kwargs):
+def model_predict(model, features, labels, batch_size):
     """Runs prediction on a given model w.r.t. features, labels, 
        and a batch size.
 
@@ -642,15 +638,13 @@ def model_predict(**kwargs):
 
     Returns: generator
     """
-    m, feat, lab, bs = kwargs['model'], kwargs['features'], kwargs['labels'],\
-                       kwargs['batch_size']
 
     def predict_input_fn(features, labels, batch_size):
         return tf.data.Dataset.from_tensor_slices((dict(features), labels)).batch(batch_size)
 
-    return m.predict(lambda: predict_input_fn(feat, lab, bs))
+    return model.predict(lambda: predict_input_fn(features, labels, batch_size))
 
-def scores_from_network(**kwargs):
+def scores_from_network(net_out, mean, stddev):
     """Obtains scores from a generator generated by a tf.estimator.EstimatorSpec.
 
     Args:
@@ -660,19 +654,19 @@ def scores_from_network(**kwargs):
 
     Returns: actual scores (reverse zscored)
     """
-    no, mean, std, s = kwargs['net_out'], kwargs['mean'], kwargs['stddev'], 'scores'
-
+    s = 'scores'
     scores = []
     try:
         while True:
-            out = next(no)
-            scores.append(da.reverse_zscores(data=out[s], mean=mean, stddev=std))
+            out = next(net_out)
+            scores.append(da.reverse_zscores(data=out[s], mean=mean, stddev=stddev))
     except StopIteration:
         pass 
 
     return scores
 
-def compare_pred_scores(**kwargs):
+def compare_pred_scores(pred_scores, gids, original_labels, pred_key, 
+                        actual_key, distance_key, correct_key):
     """Computes prediction metadata in the form of game id to metadata.
 
     Args:
@@ -687,17 +681,16 @@ def compare_pred_scores(**kwargs):
     
     Returns: comparison map by gid
     """
-    ps, gids, og_lab, pk, ak, dk, ck = kwargs['pred_scores'], kwargs['gids'], kwargs['original_labels'], kwargs['pred_key'],\
-                                       kwargs['actual_key'], kwargs['distance_key'], kwargs['correct_key']
 
     comps = {}
-    for i, s in enumerate(ps):
-        comps[gids[i]] = {pk: s, ak: og_lab[i], dk: list(np.abs(np.array(og_lab[i]) - np.array(s))),
-                          ck: s.index(max(s)) == og_lab[i].index(max(og_lab[i]))}
+    for i, s in enumerate(pred_scores):
+        comps[gids[i]] = {pred_key: s, actual_key: original_labels[i], 
+                          distance_key: list(np.abs(np.array(original_labels[i]) - np.array(s))),
+                          correct_key: s.index(max(s)) == original_labels[i].index(max(original_labels[i]))}
 
     return comps
 
-def prediction_summary(**kwargs):
+def prediction_summary(pred_comparisons, distance_key, correct_key, stddev, mean):
     """Computes a summary based off of predictions.
 
     Args:
@@ -709,17 +702,17 @@ def prediction_summary(**kwargs):
     
     Returns: summary map
     """
-    pc, dk, ck, std, m = kwargs['pred_comparisons'], kwargs['distance_key'],\
-                         kwargs['correct_key'], kwargs['stddev'], kwargs['mean']
 
-    len_pc = len(pc)
-    corr = len(filter(lambda gid: pc[gid][ck], pc))
+    len_pc = len(pred_comparisons)
+    corr = len(filter(lambda gid: pred_comparisons[gid][correct_key], pred_comparisons))
 
-    return {'stddev_of_points': std, 'mean_of_points': m, 'num_predictions': len_pc, 'percent_correct': corr / float(len_pc), 
+    return {'stddev_of_points': stddev, 'mean_of_points': mean, 'num_predictions': len_pc, 
+            'percent_correct': corr / float(len_pc), 
             'correct': corr, 'incorrect': len_pc - corr, 
-            'average_distance_by_team': np.average(np.reshape(map(lambda gid: pc[gid][dk], pc), [-1]))}    
+            'average_distance_by_team': np.average(np.reshape(map(lambda gid: pred_comparisons[gid][distance_key],
+                                                                  pred_comparisons), [-1]))}
 
-def output_prediction_summary(**kwargs):
+def output_prediction_summary(pred_comparisons, pred_summary, file_name, file_dir):
     """Outputs prediction summary to file. Will create prediction directory
        if it does not exist. Existing files will be overwritten.
 
@@ -731,25 +724,24 @@ def output_prediction_summary(**kwargs):
     
     Returns: None
     """
-    comp, pred_sum, fn, fd = kwargs['pred_comparisons'], kwargs['pred_summary'], kwargs['file_name'], kwargs['file_dir']
 
-    pred_dir = path.abspath(fd)
+    pred_dir = path.abspath(file_dir)
     if not path.exists(pred_dir):
         os.makedirs(pred_dir)
 
-    fp = path.join(pred_dir, fn)
+    fp = path.join(pred_dir, file_name)
     with open(fp, 'w') as fh:
-        for gid, pred in comp.iteritems():
+        for gid, pred in pred_comparisons.iteritems():
             fh.write(str((gid, pred)) + "\n")
-        pred_sum_keys = sorted(pred_sum.keys())
+        pred_sum_keys = sorted(pred_summary.keys())
         fh.write("\nSummary: \n")
         for k in pred_sum_keys:
-            fh.write("\t%s: %s\n" % (str(k), str(pred_sum[k])))
+            fh.write("\t%s: %s\n" % (str(k), str(pred_summary[k])))
         fh.write("\n")
 
     print("Output can be seen in %s file" % (str(fp)))    
 
-def evaluate_models(**kwargs):
+def evaluate_models(file_configs, all_sea_data, model_splits, model_predict_dir):
     """Evalutes models by taking in associated data and computing splits before executing the 
        model. So a stochastic split function would be executed twice for the same configuration.
      
@@ -763,26 +755,23 @@ def evaluate_models(**kwargs):
     
     Returns: None
     """
-    fcs, sd, rd, asd, sp, dk, h, ta, ls, fs, msd, sf, rps, nd, reg_d, ms, t, bs, mpd = kwargs['file_configs'],\
-                                                   kwargs['sea_dirs'], 'run_dir',  kwargs['all_sea_data'],\
-                                                   'splitPercent', 'data', 'histo', 'team_avgs', 'labels',\
-                                                   'features', 'model_sub_dir', 'splitFunction', 'runsPerSeason',\
-                                                   'norm_data', 'regression_data', kwargs['model_splits'], 'train',\
-                                                   'batchSize', kwargs['model_predict_dir']
 
-    for f in fcs:
+    rd, sp, dk, h = 'run_dir', 'splitPercent', 'data', 'histo'
+    ta, ls, fs, msd, sf = 'team_avgs', 'labels', 'features', 'model_sub_dir', 'splitFunction'
+    rps, nd, reg_d = 'runsPerSeason', 'norm_data', 'regression_data'
+    t, bs, mpd = 'train', 'batchSize', model_predict_dir
+    for f in file_configs:
         ec, dirs = f
         for d in dirs:
-            sea_data = asd[d]
+            sea_data = all_sea_data[d]
             ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
-            split = ms[d][ec[dk][sf]][ec[dk][sp]]
+            split = model_splits[d][ec[dk][sf]][ec[dk][sp]]
             norm_labels, lab_mean, lab_std = z_score_labels(labels=sea_data[reg_d][1])
             norm_feats = z_scores(data={k: sea_data[reg_d][0][k] for k in sea_data[nd].keys()})
             train, test = split_model_data(data_split=split, model_data=(norm_feats, norm_labels, sea_data[reg_d][-1]))
             np_train, np_test = cast_to_nparray(lis=[train[0], train[1]]), cast_to_nparray(lis=[test[0], test[1]])
             for i in range(ec[rps]):
-                model, train_spec, eval_spec = create_model(team_avgs=sea_data[ta], split=split, labels=sea_data[ls], 
-                                                            features=sea_data[fs], estimator_config=ec, train_data=np_train, 
+                model, train_spec, eval_spec = create_model(features=sea_data[fs], estimator_config=ec, train_data=np_train, 
                                                             test_data=np_test, model_pred_dir=mpd if mpd else None)
                 if mpd:           
                     key_args = {'pred_key': 'predictions', 'actual_key': 'actual', 'distance_key': 'distance', 
@@ -801,7 +790,7 @@ def evaluate_models(**kwargs):
                 else:
                     tf.estimator.train_and_evaluate(model, train_spec, eval_spec)               
 
-def model_data_splits(**kwargs):
+def model_data_splits(file_configs, season_data):
     """Cache game id splits according to configuration of the split itself. 
        For example, if multiple configs have the exact same data values in
        their protobuf, then those models will share the same data split.
@@ -814,11 +803,10 @@ def model_data_splits(**kwargs):
     
     Returns: map of model splits
     """
-    file_cs, sp, sf, dk, sea_data, h = kwargs['file_configs'], 'splitPercent', 'splitFunction',\
-                                       'data', kwargs['season_data'], 'histo'
 
+    sp, sf, dk, h = 'splitPercent', 'splitFunction', 'data', 'histo'
     splits = {}
-    for fc in file_cs:
+    for fc in file_configs:
         _, dirs, conf = fc
         for d in dirs:
             if d not in splits:
@@ -826,15 +814,15 @@ def model_data_splits(**kwargs):
             if conf[dk][sf] not in splits[d]:
                 splits[d][conf[dk][sf]] = {}
             if conf[dk][sp] not in splits[d][conf[dk][sf]]:
-                splits[d][conf[dk][sf]][conf[dk][sp]] = SPLIT_FUNCTION[conf[dk][sf]](game_histo=sea_data[d][h], 
+                splits[d][conf[dk][sf]][conf[dk][sp]] = SPLIT_FUNCTION[conf[dk][sf]](game_histo=season_data[d][h], 
                                                                                      split_percentage=conf[dk][sp])
    
     return splits
 
 def main(args):
     parser = argparse.ArgumentParser(description='Predict scores of college football games')
-    parser.add_argument('--estimator_configs', nargs='+', required=True, help='List of model configs')
-    parser.add_argument('--model_predict_dir', required=False, help='Run a model in prediction mode')
+    parser.add_argument('--estimator-configs', nargs='+', required=True, help='List of model configs')
+    parser.add_argument('--model-predict-dir', required=False, help='Run a model in prediction mode')
     args = parser.parse_args() 
     cf = 'config'
     dc = '.' + cf
@@ -856,7 +844,7 @@ def main(args):
         util.print_cache_reads(coll=cs, data_origin=DATA_CACHE_DIR)
         splits = model_data_splits(file_configs=map(lambda f: (f[0], sea_dirs[f[0]], f[-1][cf]), file_configs), 
                                    season_data=sea_data)
-        evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs), sea_dirs=sea_dirs, 
+        evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs),
                         all_sea_data=sea_data, model_splits=splits, 
                         model_predict_dir=path.abspath(args.model_predict_dir) if args.model_predict_dir else None)
 
