@@ -19,7 +19,7 @@ ACCURACY_CACHE = path.join(DATA_CACHE_DIR, 'accuracy')
 FIGURE_DIR = path.join(util.FIGURE_DIR, STATIC_ANALYSIS)
 YEAR_FROM_DIR = lambda s: path.basename(s).replace('cfbstats-com-', '')[:4]
 
-def evaluate_model(**kwargs):
+def evaluate_model(dirs, model_fn):
     """Evaluates a given model_fn over a given set of dirs.
 
     Args:
@@ -29,10 +29,10 @@ def evaluate_model(**kwargs):
     Returns: map of season dir name name to model_fn 
              applied to each season
     """
-    ds, no_pred, model_fn = kwargs['dirs'], 'no_pred', kwargs['model_fn']
-    
+
+    no_pred = 'no_pred'
     result = {}
-    for data_dir in ds:
+    for data_dir in dirs:
         stats = tgs.team_game_stats(directory=data_dir)
         game_data = game.game_stats(directory=data_dir)
         preds = model.predict_all(team_game_stats=stats, game_infos=game_data, no_pred_key=no_pred)
@@ -47,7 +47,7 @@ def evaluate_model(**kwargs):
                                           skip_keys={no_pred})
     return result
 
-def model_meta_data(**kwargs):
+def model_meta_data(acc_data):
     """Given model accuracy data, computes max, min, range, and average.
 
     Args:
@@ -55,9 +55,8 @@ def model_meta_data(**kwargs):
     
     Returns: map of model metadata
     """
-    acc = kwargs['acc_data']
 
-    accs = map(lambda x: x[1]['accuracy'], acc.iteritems())
+    accs = map(lambda x: x[1]['accuracy'], acc_data.iteritems())
     model_meta = {}
     model_meta['max_accuracy'] = mx = max(accs)
     model_meta['min_accuracy'] = mi = min(accs)
@@ -66,7 +65,7 @@ def model_meta_data(**kwargs):
 
     return model_meta
 
-def accuracy_bar_chart_by_season(**kwargs):
+def accuracy_bar_chart_by_season(acc_data, model_meta_data, fig_loc):
     """Creates accuracy bar chart by season. All games are included.
 
     Args:
@@ -75,14 +74,14 @@ def accuracy_bar_chart_by_season(**kwargs):
     
     Returns: None
     """
-    acc, mmd, ak, mia, ma, avg, t, fl = kwargs['acc_data'], kwargs['model_meta_data'], 'accuracy', 'min_accuracy',\
-                                        'max_accuracy', 'average', 'total', kwargs['fig_loc']
+    ak, mia, ma = 'accuracy', 'min_accuracy', 'max_accuracy'
+    avg, t = 'average', 'total'
 
-    th = mmd[avg] * 100
-    acc_ys = np.array(map(lambda s: acc[s][ak] * 100, acc))
-    ng_ys = np.array(map(lambda s: acc[s][t], acc))
-    x = sorted(map(YEAR_FROM_DIR, acc.keys()))
-    avg_label = avg + '=' + str(round(mmd[avg] * 100, 2))
+    th = model_meta_data[avg] * 100
+    acc_ys = np.array(map(lambda s: acc_data[s][ak] * 100, acc_data))
+    ng_ys = np.array(map(lambda s: acc_data[s][t], acc_data))
+    x = sorted(map(YEAR_FROM_DIR, acc_data.keys()))
+    avg_label = avg + '=' + str(round(model_meta_data[avg] * 100, 2))
 
     fig, ax = plt.subplots()
     fig.set_figwidth(14)
@@ -98,9 +97,9 @@ def accuracy_bar_chart_by_season(**kwargs):
         gi, gv = g
         ax.text(gi - 0.2, 5, str(gv) + 'g', color='white', fontweight='bold')
 
-    plt.savefig(path.join(fl, 'accuracy_by_season.png'))
+    plt.savefig(path.join(fig_loc, 'accuracy_by_season.png'))
         
-def accuracy_bar_chart_by_date_per_season(**kwargs):
+def accuracy_bar_chart_by_date_per_season(acc_by_date, fig_loc):
     """Creates bar chart of model by each day in season.
 
     Args:
@@ -108,9 +107,9 @@ def accuracy_bar_chart_by_date_per_season(**kwargs):
     
     Returns: None
     """
-    abd, avg, num_games_avg, fl = kwargs['acc_by_date'], 'acc_avg', 'num_games_avg', kwargs['fig_loc']
+    avg, num_games_avg = 'acc_avg', 'num_games_avg'
 
-    for s, s_acc in abd.iteritems():
+    for s, s_acc in acc_by_date.iteritems():
         day_accs = map(lambda d: (d, round(s_acc[d]['accuracy'] * 100, 2), s_acc[d]['total']), s_acc)
         day_accs.sort(key=lambda x: du.parse(x[0]))
         xs = map(lambda t: t[0], day_accs)
@@ -139,7 +138,7 @@ def accuracy_bar_chart_by_date_per_season(**kwargs):
             gi, gv = g
             ax.text(gi - 0.3, 5, str(gv) + 'g', color='white', fontweight='bold')
 
-        plt.savefig(path.join(fl, str(YEAR_FROM_DIR(s)) + '_accuracy_by_date.png'))
+        plt.savefig(path.join(fig_loc, str(YEAR_FROM_DIR(s)) + '_accuracy_by_date.png'))
 
 def main(args):
     parser = argparse.ArgumentParser(description='Run static analysis on the cfb dataset')

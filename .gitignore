@@ -1,4 +1,5 @@
 *.txt
+*.png
 *.pyc
 accuracy_analysis
 *.test.sh
