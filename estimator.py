@@ -690,7 +690,7 @@ def compare_pred_scores(pred_scores, gids, original_labels, pred_key,
 
     return comps
 
-def prediction_summary(pred_comparisons, distance_key, correct_key, stddev, mean):
+def prediction_summary(pred_comparisons, distance_key, correct_key, stddev, mean, **kwargs):
     """Computes a summary based off of predictions.
 
     Args:
@@ -782,7 +782,7 @@ def evaluate_models(file_configs, all_sea_data, model_splits, model_predict_dir)
                                         original_labels=map(lambda s: list(s), 
                                                             da.reverse_zscores(data=map(lambda s: np.array(s), test[1]), 
                                                                                mean=lab_mean, stddev=lab_std)),
-                                        mean=lab_mean, stddev=lab_std, **key_args)
+                                                  **key_args)
                     output_prediction_summary(pred_comparisons=compare, 
                                               pred_summary=prediction_summary(pred_comparisons=compare, 
                                                                                     mean=lab_mean, stddev=lab_std, **key_args), 
