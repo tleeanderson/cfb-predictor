@@ -7,7 +7,7 @@ import os.path as path
 
 FILE_NAME = 'team-game-statistics.csv'
 
-def csv_to_map(**kwargs):
+def csv_to_map(csv_reader):
     """Given a list of values, converts each value to a map
 
     Args:
@@ -15,7 +15,6 @@ def csv_to_map(**kwargs):
     
     Returns: map of game ids to a map of team ids and their game stats
     """
-    csv_reader = kwargs['csv_reader']
 
     result = {}
     for row in csv_reader:
@@ -28,7 +27,7 @@ def csv_to_map(**kwargs):
         result[game_code_id][team_code_id] = team_game_stats
     return result
 
-def alter_types(**kwargs):
+def alter_types(game_map, type_mapper):
     """Applies a type_mapper function over the values of a game_map
 
     Args:
@@ -37,16 +36,15 @@ def alter_types(**kwargs):
     
     Returns: a map of game ids to their values
     """
-    game_map, type_mapper = kwargs['game_map'], kwargs['type_mapper']
-    result = {}
 
+    result = {}
     for game_id, teams in game_map.iteritems():
         result[game_id] = {}
         for team_id, team_stats in teams.iteritems():
             result[game_id][team_id] = type_mapper(team_stats=team_stats)
     return result
 
-def type_mapper(**kwargs):
+def type_mapper(team_stats):
     """Casts the values of a given map to either int or float. The 
        first type that produces a successful cast is the resulting
        type of the value
@@ -56,15 +54,14 @@ def type_mapper(**kwargs):
     
     Returns: a map
     """
-    team_stats = kwargs['team_stats']
-    result = {}
 
+    result = {}
     for stat_name, stat_value in team_stats.iteritems():
         value = util.convert_type(types=(int, float), value=stat_value)
         result[stat_name] = value
     return result
 
-def add_labels(**kwargs):
+def add_labels(team_game_stats):
     """Adds a winning key to each game in team_game_stats, where the 
        value has the winning team, total points, and points per team
 
@@ -74,19 +71,19 @@ def add_labels(**kwargs):
     
     Returns: a map
     """
-    team_game_stats = copy.deepcopy(kwargs['team_game_stats'])
-    
-    for game_id, teams in team_game_stats.iteritems():  
+
+    team_game_stats_copy = copy.deepcopy(team_game_stats)
+    for game_id, teams in team_game_stats_copy.iteritems():
         points = []
         for team_id, game_stats in teams.iteritems():
             points.append((game_stats['Points'], team_id))
-        team_game_stats[game_id]['Winner'] = {'Team Code': max(points)[1], 
+        team_game_stats_copy[game_id]['Winner'] = {'Team Code': max(points)[1], 
                                               'Total Points': sum(map(lambda t: t[0], points)), 
                                               points[0][1]: points[0][0], 
                                               points[-1][1]: points[-1][0]}
-    return team_game_stats
+    return team_game_stats_copy
 
-def win_loss_pct(**kwargs):
+def win_loss_pct(tid1, games):
     """Computes winning percentage for a given team across a
        given number of games
 
@@ -96,8 +93,8 @@ def win_loss_pct(**kwargs):
     
     Returns: winning percentage
     """
-    tid1, games, ps = kwargs['tid1'], kwargs['games'], 'Points'
 
+    ps = 'Points'
     result = {}
     result[tid1] = 0.0
     for gid, stat in games.iteritems():
@@ -108,7 +105,7 @@ def win_loss_pct(**kwargs):
 
     return result
 
-def averages(**kwargs):
+def averages(game_stats, team_ids):
     """Computes averages of all statistics in the game_stats map for a 
        given set of team_ids
 
@@ -118,7 +115,6 @@ def averages(**kwargs):
     
     Returns: map of averages by team id
     """
-    game_stats, team_ids = kwargs['game_stats'], kwargs['team_ids']
 
     avgs = {}
     for gid, team_stats in game_stats.iteritems():
@@ -135,7 +131,7 @@ def averages(**kwargs):
                                     merge_op=op.div)
     return avgs
 
-def team_game_stats(**kwargs):
+def team_game_stats(directory):
     """Reads in data from a team-game-statistics.csv file
 
     Args:
@@ -144,9 +140,8 @@ def team_game_stats(**kwargs):
     
     Returns: a map of data of each game by teams
     """
-    input_directory = kwargs['directory']
 
-    tgs_file = path.join(input_directory, FILE_NAME)
+    tgs_file = path.join(directory, FILE_NAME)
     team_game_stats = util.read_file(input_file=tgs_file, func=csv_to_map)
     converted_tgs = alter_types(type_mapper=type_mapper, 
                                     game_map=team_game_stats)
