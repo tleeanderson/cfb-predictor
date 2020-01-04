@@ -155,8 +155,8 @@ def main(args):
         os.makedirs(FIGURE_DIR)
     if args.accuracy_by_date:
         print('Histograming accuracy by date')
-        acc_by_date, cs = util.model_data(comp_func_args={'model_fn': model.accuracy_by_date}, cache_dir=ACC_BY_DATE_CACHE, 
-                                      **md_args)
+        acc_by_date, cs = util.model_data(comp_func_args={'model_fn': model.accuracy_by_date},
+                                          cache_dir=ACC_BY_DATE_CACHE, **md_args)
         util.print_cache_reads(coll=cs, data_origin=ACC_BY_DATE_CACHE)
         filt_abd = {}
         for s, s_acc in acc_by_date.iteritems():
@@ -165,9 +165,11 @@ def main(args):
         accuracy_bar_chart_by_date_per_season(acc_by_date=filt_abd, fig_loc=FIGURE_DIR)
     else:
         print('Calculating accuracy by season')
-        acc, cs = util.model_data(comp_func_args={'model_fn': model.accuracy}, cache_dir=ACCURACY_CACHE, **md_args)
+        acc, cs = util.model_data(comp_func_args={'model_fn': model.accuracy}, cache_dir=ACCURACY_CACHE,
+                                  **md_args)
         util.print_cache_reads(coll=cs, data_origin=ACCURACY_CACHE)
-        accuracy_bar_chart_by_season(acc_data=acc, model_meta_data=model_meta_data(acc_data=acc), fig_loc=FIGURE_DIR)
+        accuracy_bar_chart_by_season(acc_data=acc, model_meta_data=model_meta_data(acc_data=acc),
+                                     fig_loc=FIGURE_DIR)
     print("Figures written to %s" % (path.abspath(FIGURE_DIR)))
 
 if __name__ == '__main__':
