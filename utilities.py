@@ -101,7 +101,7 @@ def write_to_cache(cache_dir, data):
     """
 
     for sea, d in data.iteritems():
-        with open(path.join(path.abspath(cd), path.basename(sea)), 'wb') as fh:
+        with open(path.join(path.abspath(cache_dir), path.basename(sea)), 'wb') as fh:
             pickle.dump(d, fh)
 
 def read_from_cache(cache_dir, context_dir):
