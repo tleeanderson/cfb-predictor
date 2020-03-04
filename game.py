@@ -38,7 +38,7 @@ def seasons_by_game_code(game_code_id, games):
     games_by_team = {}
     games_by_team[games[game_code_id][visit_team]] = {}
     games_by_team[games[game_code_id][home_team]] = {}
-    for gid, game_info in games.iteritems():
+    for gid, game_info in games.items():
         if game_info[visit_team] in games_by_team:
             games_by_team[game_info[visit_team]][gid] = util.subset_of_map(full_map=game_info, 
                                                                            take_out_keys={'Game Code'})
@@ -64,9 +64,9 @@ def subseason(team_games, game_code_id, compare):
     date = 'Date'
     
     if game_code_id in team_games:
-        lis = map(lambda e: (e[0], du.parse(e[-1][date])), team_games.iteritems())
+        lis = [(e[0], du.parse(e[-1][date])) for e in iter(team_games.items())]
         lis.sort(key=lambda e: e[-1])
-        return filter(lambda x: compare(x[-1], du.parse(team_games[game_code_id][date])), lis)
+        return [x for x in lis if compare(x[-1], du.parse(team_games[game_code_id][date]))]
     else:
         raise ValueError("%s id was not in %s" % (str(game_code_id), str(team_games)))
 
@@ -82,4 +82,8 @@ def game_stats(directory):
     game_file = path.join(directory, FILE_NAME)
     game_data = util.read_file(input_file=game_file, func=csv_to_map)
     return game_data
+
+def game_data(dirs):
+    return {d: game_stats(directory=d) for d in dirs}
+
     

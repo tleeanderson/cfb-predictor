@@ -15,9 +15,9 @@ from google.protobuf import text_format
 import argparse
 from google.protobuf.json_format import MessageToDict
 import uuid
-import pickle
 import game
 import utilities as util
+from functools import reduce
 
 TF_FEATURE_NAME = lambda f: f.replace(' ', '-')
 BATCH_SIZE = 20
@@ -38,11 +38,11 @@ def averages(team_game_stats, game_infos, skip_fields):
 
     game_avgs = {}
     no_avgs = []
-    for gid in team_game_stats.keys():
+    for gid in list(team_game_stats.keys()):
         avgs = model.team_avgs(game_code_id=gid, game_data=game_infos, tg_stats=team_game_stats)
         if len(avgs) == 2:
             game_avgs[gid] = {}
-            for tid, stats in avgs.iteritems():
+            for tid, stats in avgs.items():
                 game_avgs[gid][tid] = {k: stats[k] for k in set(stats.keys()).difference(skip_fields)}
         else:
             no_avgs.append(gid)
@@ -63,10 +63,10 @@ def binary_classification_data(game_averages, labels):
 
     features = {}
     labels = []
-    for gid, team_avgs in game_averages.iteritems():
-        for ta, feature_team_id, fid in zip(team_avgs.iteritems(), ['-0', '-1'], [0, 1]):
+    for gid, team_avgs in game_averages.items():
+        for ta, feature_team_id, fid in zip(iter(team_avgs.items()), ['-0', '-1'], [0, 1]):
             tid, stats = ta
-            for name, value in stats.iteritems():
+            for name, value in stats.items():
                 stat_key = TF_FEATURE_NAME(name + feature_team_id)
                 if stat_key not in features:
                     features[stat_key] = []
@@ -74,7 +74,7 @@ def binary_classification_data(game_averages, labels):
             if input_labels[gid]['Winner']['Team Code'] == tid:
                 labels.append(fid)
 
-    for k in features.keys():
+    for k in list(features.keys()):
         features[k] = np.array(features[k])
 
     return features, np.array(labels)
@@ -97,15 +97,15 @@ def regression_data(game_averages, labels):
     features = {}
     out_labels = []
     game_ids = []
-    for gid, team_avgs in game_averages.iteritems():
-        for ta, feature_team_id in zip(team_avgs.iteritems(), ['-0', '-1']):
+    for gid, team_avgs in game_averages.items():
+        for ta, feature_team_id in zip(iter(team_avgs.items()), ['-0', '-1']):
             tid, stats = ta
-            for name, value in stats.iteritems():
+            for name, value in stats.items():
                 stat_key = TF_FEATURE_NAME(name + feature_team_id)
                 if stat_key not in features:
                     features[stat_key] = []
                 features[stat_key].append(value)
-        out_labels.append(map(lambda tk: labels[gid][w][tk], team_avgs.keys()))
+        out_labels.append([labels[gid][w][tk] for tk in list(team_avgs.keys())])
         game_ids.append(gid)
 
     return [features, out_labels, tuple(game_ids)]
@@ -119,7 +119,7 @@ def cast_to_nparray(lis):
     Returns: lis of nparray types
     """
     
-    for k in lis[0].keys():
+    for k in list(lis[0].keys()):
         lis[0][k] = np.array(lis[0][k])
 
     lis[1] = np.array(lis[1])
@@ -144,8 +144,8 @@ def z_score_labels(labels):
     if len(flat) % 2 == 0:        
         mean, std = np.average(flat), np.std(flat)
         zs = da.z_scores_args(data=flat, mean=mean, stddev=std)
-        inds = [i for i in zip(range(0, len(flat) - 1, 2), range(1, len(flat), 2))]
-        return map(lambda i: [zs[i[0]], zs[i[-1]]], inds), mean, std
+        inds = [i for i in zip(list(range(0, len(flat) - 1, 2)), list(range(1, len(flat), 2)))]
+        return [[zs[i[0]], zs[i[-1]]] for i in inds], mean, std
     else:
         raise ValueError("Labels must have shape [n, 2]")
 
@@ -188,7 +188,7 @@ def stochastic_split_data(game_histo, split_percentage):
     train = []
     test = []
     train_divi = True
-    for k, games in game_histo.iteritems():
+    for k, games in game_histo.items():
         count = len(games)
         if count == 1:
             if train_divi:
@@ -414,7 +414,7 @@ def model_fn(features, labels, mode, params):
         net = tf.nn.dropout(net, keep_prob=ec.get(do).get(r))
 
     #hidden layer
-    for unit, num in zip(hidden_layers, range(len(hidden_layers))):
+    for unit, num in zip(hidden_layers, list(range(len(hidden_layers)))):
         layer_params = {}
         if unit.get(reg):
             layer_params.update({'kernel_regularizer': REGULARIZATION.get(unit.get(reg).get(ty))(unit.get(reg).get(sc))})
@@ -493,7 +493,7 @@ def z_scores(data):
     Returns: a map
     """
     
-    return {f: da.z_scores(data=data[f]) for f in data.keys()}
+    return {f: da.z_scores(data=data[f]) for f in list(data.keys())}
 
 def create_model(features, estimator_config, 
                  train_data, test_data, model_pred_dir):
@@ -553,7 +553,7 @@ def season_dirs(configs):
     for c in configs:
         result[c[0]] = glob.glob(c[1].get(d).get(dp))
 
-    return result, set(reduce(lambda f1,f2: f1 + f2, result.values()))
+    return result, set(reduce(lambda f1,f2: f1 + f2, list(result.values())))
 
 def read_config(estimator_file):
     """Given a file, reads it in and maps its values to a protobuf object.
@@ -590,13 +590,13 @@ def season_data(dirs):
         gs = game.game_stats(directory=season_dir)
         team_stats = tgs.team_game_stats(directory=season_dir)
         avgs, _ = averages(team_game_stats=team_stats, game_infos=gs, skip_fields=model.UNDECIDED_FIELDS)
-        team_stats = {k: team_stats[k] for k in avgs.keys()}        
+        team_stats = {k: team_stats[k] for k in list(avgs.keys())}        
         labels = tgs.add_labels(team_game_stats=team_stats)
         histo = histogram_games(game_infos=gs, game_stats=avgs, histo_key='Date')   
         reg = regression_data(game_averages=avgs, labels=labels)
         features = da.normal_dists(field_avgs=reg[0])
 
-        result.update({season_dir: {'features': features.keys(), 'labels': labels, 'team_avgs': avgs, 
+        result.update({season_dir: {'features': list(features.keys()), 'labels': labels, 'team_avgs': avgs, 
                                     'game_stats': gs, 'team_stats': team_stats, 'histo': histo, 'regression_data': reg, 
                                     'norm_data': features}})
 
@@ -618,11 +618,11 @@ def split_model_data(data_split, model_data):
     train, test = data_split
 
     gid_to_ind = {v: i for i, v in enumerate(games)}
-    train_inds, test_inds = map(lambda gids: map(lambda g: gid_to_ind[g], gids), (train, test))
-    train_gids, test_gids = map(lambda inds: map(lambda i: games[i], inds), (train_inds, test_inds))
-    train_lab, test_lab = map(lambda inds: map(lambda i: lab[i], inds), (train_inds, test_inds))
-    train_feat = {k: map(lambda i: feat[k][i], train_inds) for k in feat.keys()}
-    test_feat = {k: map(lambda i: feat[k][i], test_inds) for k in feat.keys()}
+    train_inds, test_inds = [[gid_to_ind[g] for g in gids] for gids in (train, test)]
+    train_gids, test_gids = [[games[i] for i in inds] for inds in (train_inds, test_inds)]
+    train_lab, test_lab = [[lab[i] for i in inds] for inds in (train_inds, test_inds)]
+    train_feat = {k: [feat[k][i] for i in train_inds] for k in list(feat.keys())}
+    test_feat = {k: [feat[k][i] for i in test_inds] for k in list(feat.keys())}
 
     return ((train_feat, train_lab, train_gids), (test_feat, test_lab, test_gids))
 
@@ -704,13 +704,12 @@ def prediction_summary(pred_comparisons, distance_key, correct_key, stddev, mean
     """
 
     len_pc = len(pred_comparisons)
-    corr = len(filter(lambda gid: pred_comparisons[gid][correct_key], pred_comparisons))
+    corr = len([gid for gid in pred_comparisons if pred_comparisons[gid][correct_key]])
 
     return {'stddev_of_points': stddev, 'mean_of_points': mean, 'num_predictions': len_pc, 
             'percent_correct': corr / float(len_pc), 
             'correct': corr, 'incorrect': len_pc - corr, 
-            'average_distance_by_team': np.average(np.reshape(map(lambda gid: pred_comparisons[gid][distance_key],
-                                                                  pred_comparisons), [-1]))}
+            'average_distance_by_team': np.average(np.reshape([pred_comparisons[gid][distance_key] for gid in pred_comparisons], [-1]))}
 
 def output_prediction_summary(pred_comparisons, pred_summary, file_name, file_dir):
     """Outputs prediction summary to file. Will create prediction directory
@@ -731,7 +730,7 @@ def output_prediction_summary(pred_comparisons, pred_summary, file_name, file_di
 
     fp = path.join(pred_dir, file_name)
     with open(fp, 'w') as fh:
-        for gid, pred in pred_comparisons.iteritems():
+        for gid, pred in pred_comparisons.items():
             fh.write(str((gid, pred)) + "\n")
         pred_sum_keys = sorted(pred_summary.keys())
         fh.write("\nSummary: \n")
@@ -739,7 +738,7 @@ def output_prediction_summary(pred_comparisons, pred_summary, file_name, file_di
             fh.write("\t%s: %s\n" % (str(k), str(pred_summary[k])))
         fh.write("\n")
 
-    print("Output can be seen in %s file" % (str(fp)))    
+    print(("Output can be seen in %s file" % (str(fp))))    
 
 def evaluate_models(file_configs, all_sea_data, model_splits, model_predict_dir):
     """Evalutes models by taking in associated data and computing splits before executing the 
@@ -767,7 +766,7 @@ def evaluate_models(file_configs, all_sea_data, model_splits, model_predict_dir)
             ec.update({rd: "%s_%s" % (ec[msd], path.basename(d))})
             split = model_splits[d][ec[dk][sf]][ec[dk][sp]]
             norm_labels, lab_mean, lab_std = z_score_labels(labels=sea_data[reg_d][1])
-            norm_feats = z_scores(data={k: sea_data[reg_d][0][k] for k in sea_data[nd].keys()})
+            norm_feats = z_scores(data={k: sea_data[reg_d][0][k] for k in list(sea_data[nd].keys())})
             train, test = split_model_data(data_split=split, model_data=(norm_feats, norm_labels, sea_data[reg_d][-1]))
             np_train, np_test = cast_to_nparray(lis=[train[0], train[1]]), cast_to_nparray(lis=[test[0], test[1]])
             for i in range(ec[rps]):
@@ -779,9 +778,8 @@ def evaluate_models(file_configs, all_sea_data, model_splits, model_predict_dir)
                     pred = model_predict(model=model, features=test[0], labels=test[1], batch_size=ec[t][bs])
                     net_scores = scores_from_network(net_out=pred, mean=lab_mean, stddev=lab_std)
                     compare = compare_pred_scores(pred_scores=net_scores, gids=test[2], 
-                                        original_labels=map(lambda s: list(s), 
-                                                            da.reverse_zscores(data=map(lambda s: np.array(s), test[1]), 
-                                                                               mean=lab_mean, stddev=lab_std)),
+                                        original_labels=[list(s) for s in da.reverse_zscores(data=[np.array(s) for s in test[1]], 
+                                                                               mean=lab_mean, stddev=lab_std)],
                                                   **key_args)
                     output_prediction_summary(pred_comparisons=compare, 
                                               pred_summary=prediction_summary(pred_comparisons=compare, 
@@ -827,24 +825,24 @@ def main(args):
     cf = 'config'
     dc = '.' + cf
   
-    valid_files = filter(lambda f: f.endswith(dc), args.estimator_configs)
+    valid_files = [f for f in args.estimator_configs if f.endswith(dc)]
     if not valid_files:
-        print("--estimator_configs each file must end with %s to be processed" % (str(dc)))
+        print(("--estimator_configs each file must end with %s to be processed" % (str(dc))))
     else:
-        file_configs = map(lambda f: (f, path.basename(f).replace(dc, ''), read_config(estimator_file=f)), valid_files)
+        file_configs = [(f, path.basename(f).replace(dc, ''), read_config(estimator_file=f)) for f in valid_files]
         for fc in file_configs:
             fc[-1].get(cf).update({'model_sub_dir': fc[1]})
 
-        sea_dirs, all_dirs = season_dirs(configs=map(lambda c: (c[0], c[-1][cf]), file_configs))
+        sea_dirs, all_dirs = season_dirs(configs=[(c[0], c[-1][cf]) for c in file_configs])
         print("Reading data from these directories: ")
         util.print_collection(coll=all_dirs)
         sea_data, cs = util.model_data(cache_dir=DATA_CACHE_DIR, cache_read_func=util.read_from_cache, 
                                    cache_write_func=util.write_to_cache, all_dirs=all_dirs, comp_func=season_data, 
                                    comp_func_args={}, context_dir=path.dirname(list(all_dirs)[0]))
         util.print_cache_reads(coll=cs, data_origin=DATA_CACHE_DIR)
-        splits = model_data_splits(file_configs=map(lambda f: (f[0], sea_dirs[f[0]], f[-1][cf]), file_configs), 
+        splits = model_data_splits(file_configs=[(f[0], sea_dirs[f[0]], f[-1][cf]) for f in file_configs], 
                                    season_data=sea_data)
-        evaluate_models(file_configs=map(lambda f: (f[-1][cf], sea_dirs[f[0]]), file_configs),
+        evaluate_models(file_configs=[(f[-1][cf], sea_dirs[f[0]]) for f in file_configs],
                         all_sea_data=sea_data, model_splits=splits, 
                         model_predict_dir=path.abspath(args.model_predict_dir) if args.model_predict_dir else None)
 

@@ -24,7 +24,7 @@ def test_averages():
     assert({tid_1, tid_2} == set(out[gid_3].keys()))
     assert([t1_f, t1_f] == [out[gid_2][tid_1][ps], out[gid_3][tid_1][ps]])
     assert([t2_f, t2_f] == [out[gid_2][tid_2][ps], out[gid_3][tid_2][ps]])
-    assert(all(map(lambda tids: sf not in tids, [out[gid_2], out[gid_3]])))
+    assert(all([sf not in tids for tids in [out[gid_2], out[gid_3]]]))
     assert({gid_1} == set(na))
 
 def test_regression_data():
@@ -38,12 +38,12 @@ def test_regression_data():
 
     out_feat, out_lab, gids = est.regression_data(game_averages=ga, labels=labels)
 
-    games_by_row = np.transpose(map(lambda f: out_feat[f], out_feat))
+    games_by_row = np.transpose([out_feat[f] for f in out_feat])
     assert({ry + '-0', ry + '-1', ps + '-0', ps + '-1'} == set(out_feat.keys()))
-    assert(any(map(lambda gr: {ps1, ry1, ps2, ry2} == set(gr), games_by_row)))
-    assert(any(map(lambda gr: {ps3, ry3, ps4, ry4} == set(gr), games_by_row)))
-    games_by_row_sets = tuple(map(lambda gr: set(gr), games_by_row))
-    out_lab_sets = tuple(map(lambda la: set(la), out_lab))
+    assert(any([{ps1, ry1, ps2, ry2} == set(gr) for gr in games_by_row]))
+    assert(any([{ps3, ry3, ps4, ry4} == set(gr) for gr in games_by_row]))
+    games_by_row_sets = tuple([set(gr) for gr in games_by_row])
+    out_lab_sets = tuple([set(la) for la in out_lab])
     assert(games_by_row_sets.index({ps1, ry1, ps2, ry2}) == out_lab_sets.index({p1, p2}))
     assert(games_by_row_sets.index({ps3, ry3, ps4, ry4}) == out_lab_sets.index({p3, p4}))
     assert(games_by_row_sets.index({ps1, ry1, ps2, ry2}) == out_lab_sets.index({p1, p2}) 
@@ -58,7 +58,7 @@ def test_zscore_labels():
 
     out, out_avg, out_std = est.z_score_labels(labels=labels)
     
-    assert({2} == set(map(lambda ls: len(ls), labels)))
+    assert({2} == set([len(ls) for ls in labels]))
     assert(lab_avg == out_avg)
     assert(lab_std == out_std)
     try:
@@ -89,8 +89,8 @@ def _test_split(**kwargs):
 
 def test_stochastic_split_data():
     sep, octo, nov = '09/01/2005', '10/01/2005', '11/01/2005'
-    game_histo = {sep: range(10), octo: range(10, 20), nov: range(20, 30)}
-    exp_total = sum(map(lambda r: len(game_histo[r]), game_histo))
+    game_histo = {sep: list(range(10)), octo: list(range(10, 20)), nov: list(range(20, 30))}
+    exp_total = sum([len(game_histo[r]) for r in game_histo])
 
     train, test = est.stochastic_split_data(game_histo=game_histo, split_percentage=0.5)
 
@@ -98,8 +98,8 @@ def test_stochastic_split_data():
 
 def test_static_split_data():
     sep, octo, nov = '09/01/2005', '10/01/2005', '11/01/2005'
-    game_histo = {sep: range(10), octo: range(10, 20), nov: range(20, 30)}
-    exp_total = sum(map(lambda r: len(game_histo[r]), game_histo))
+    game_histo = {sep: list(range(10)), octo: list(range(10, 20)), nov: list(range(20, 30))}
+    exp_total = sum([len(game_histo[r]) for r in game_histo])
 
     train, test = est.static_split_data(game_histo=game_histo, split_percentage=0.5)
     train_2, test_2 = est.static_split_data(game_histo=game_histo, split_percentage=0.5)
@@ -112,13 +112,13 @@ def test_static_split_data():
 def test_split_model_data():
     gid_1, gid_2, gid_3, gid_4, f1, f2 = 'gid1', 'gid2', 'gid3', 'gid4', 'f1', 'f2'
     sp1, sp2, l1, l2, l3, l4, l5, l6, l7, l8 = [gid_1, gid_2], [gid_3, gid_4], 1, 2, 3, 4, 5, 6, 7, 8
-    feat, lab = {f1: range(4), f2: range(4)}, [[l1, l2], [l3, l4], [l5, l6], [l7, l8]] 
+    feat, lab = {f1: list(range(4)), f2: list(range(4))}, [[l1, l2], [l3, l4], [l5, l6], [l7, l8]] 
     games = [gid_1, gid_2, gid_3, gid_4]
 
     t1, t2 = est.split_model_data(data_split=(sp1, sp2), model_data=(feat, lab, games))
     
-    assert(({f1: range(2), f2: range(2)}, [[l1, l2], [l3, l4]], sp1) == (t1[0], t1[1], t1[2]))
-    assert(({f1: range(2, 4), f2: range(2, 4)}, [[l5, l6], [l7, l8]], sp2) == (t2[0], t2[1], t2[2]))
+    assert(({f1: list(range(2)), f2: list(range(2))}, [[l1, l2], [l3, l4]], sp1) == (t1[0], t1[1], t1[2]))
+    assert(({f1: list(range(2, 4)), f2: list(range(2, 4))}, [[l5, l6], [l7, l8]], sp2) == (t2[0], t2[1], t2[2]))
 
 def test_compare_pred_scores():
     pk, ak, dk, ck = 'predictions', 'actual', 'distance', 'correct'
@@ -157,18 +157,18 @@ def test_model_data_splits():
     d1, d2, stoch, static, sp1 = 'd1', 'd2', 'stochastic', 'static', 0.78
     sep, octo, nov, dk, sfk, spk, h = '09/01/2005', '10/01/2005', '11/01/2005', 'data', 'splitFunction',\
                                    'splitPercent', 'histo'
-    game_histo = {sep: range(10), octo: range(10, 20), nov: range(20, 30)}
+    game_histo = {sep: list(range(10)), octo: list(range(10, 20)), nov: list(range(20, 30))}
     sea_data = {d1: {h: game_histo}, d2: {h: game_histo}}
-    exp_total = sum(map(lambda r: len(game_histo[r]), game_histo))
+    exp_total = sum([len(game_histo[r]) for r in game_histo])
     file_configs = [('', [d1, d2], {dk: {sfk: stoch, spk: sp1}}), 
                     ('', [d1, d2], {dk: {sfk: static, spk: sp1}})]
 
     out = est.model_data_splits(file_configs=file_configs, season_data=sea_data)    
 
     assert({d1, d2} == set(out.keys()))
-    assert({stoch, static} == set(np.reshape(map(lambda d: out[d].keys(), out), [-1])))
-    assert({sp1} == set(np.reshape(map(lambda d: map(lambda sf: out[d][sf].keys(), out[d]), out), [-1])))
-    for d, dv in out.iteritems():
-        for sf, sfv in dv.iteritems():
-            for sp, split in sfv.iteritems():
+    assert({stoch, static} == set(np.reshape([list(out[d].keys()) for d in out], [-1])))
+    assert({sp1} == set(np.reshape([[list(out[d][sf].keys()) for sf in out[d]] for d in out], [-1])))
+    for d, dv in out.items():
+        for sf, sfv in dv.items():
+            for sp, split in sfv.items():
                 _test_split(train=split[0], test=split[1], exp_total=exp_total)    

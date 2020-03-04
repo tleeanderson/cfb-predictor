@@ -56,7 +56,7 @@ def model_meta_data(acc_data):
     Returns: map of model metadata
     """
 
-    accs = map(lambda x: x[1]['accuracy'], acc_data.iteritems())
+    accs = [x[1]['accuracy'] for x in iter(acc_data.items())]
     model_meta = {}
     model_meta['max_accuracy'] = mx = max(accs)
     model_meta['min_accuracy'] = mi = min(accs)
@@ -78,9 +78,9 @@ def accuracy_bar_chart_by_season(acc_data, model_meta_data, fig_loc):
     avg, t = 'average', 'total'
 
     th = model_meta_data[avg] * 100
-    acc_ys = np.array(map(lambda s: acc_data[s][ak] * 100, acc_data))
-    ng_ys = np.array(map(lambda s: acc_data[s][t], acc_data))
-    x = sorted(map(YEAR_FROM_DIR, acc_data.keys()))
+    acc_ys = np.array([acc_data[s][ak] * 100 for s in acc_data])
+    ng_ys = np.array([acc_data[s][t] for s in acc_data])
+    x = sorted(map(YEAR_FROM_DIR, list(acc_data.keys())))
     avg_label = avg + '=' + str(round(model_meta_data[avg] * 100, 2))
 
     fig, ax = plt.subplots()
@@ -109,12 +109,12 @@ def accuracy_bar_chart_by_date_per_season(acc_by_date, fig_loc):
     """
     avg, num_games_avg = 'acc_avg', 'num_games_avg'
 
-    for s, s_acc in acc_by_date.iteritems():
-        day_accs = map(lambda d: (d, round(s_acc[d]['accuracy'] * 100, 2), s_acc[d]['total']), s_acc)
+    for s, s_acc in acc_by_date.items():
+        day_accs = [(d, round(s_acc[d]['accuracy'] * 100, 2), s_acc[d]['total']) for d in s_acc]
         day_accs.sort(key=lambda x: du.parse(x[0]))
-        xs = map(lambda t: t[0], day_accs)
-        acc_ys = map(lambda t: t[1], day_accs)
-        ng_ys = map(lambda t: t[2], day_accs)
+        xs = [t[0] for t in day_accs]
+        acc_ys = [t[1] for t in day_accs]
+        ng_ys = [t[2] for t in day_accs]
         acc_avg = round(np.average(acc_ys), 2)
         ng_avg = round(np.average(ng_ys), 2)
         acc_avg_label = avg + '=' + str(acc_avg)
@@ -142,9 +142,9 @@ def accuracy_bar_chart_by_date_per_season(acc_by_date, fig_loc):
 
 def main(args):
     parser = argparse.ArgumentParser(description='Run static analysis on the cfb dataset')
-    parser.add_argument('--input-directory', required=True, help='Top level directory of data')
-    parser.add_argument('--dir-suffix', required=True, help='')
-    parser.add_argument('--accuracy-by-date', required=False, action='store_true', 
+    parser.add_argument('-i', '--input-directory', required=True, help='Top level directory of data')
+    parser.add_argument('-ds', '--dir-suffix', required=True, help='')
+    parser.add_argument('-abd', '--accuracy-by-date', required=False, action='store_true', 
                         help='Histograms the predictions of the model by date')
     args = parser.parse_args()
 
@@ -159,7 +159,7 @@ def main(args):
                                           cache_dir=ACC_BY_DATE_CACHE, **md_args)
         util.print_cache_reads(coll=cs, data_origin=ACC_BY_DATE_CACHE)
         filt_abd = {}
-        for s, s_acc in acc_by_date.iteritems():
+        for s, s_acc in acc_by_date.items():
             filt_abd[s] = model.filter_by_total(acc_by_date=s_acc, lowest_val=10)
 
         accuracy_bar_chart_by_date_per_season(acc_by_date=filt_abd, fig_loc=FIGURE_DIR)
@@ -170,7 +170,7 @@ def main(args):
         util.print_cache_reads(coll=cs, data_origin=ACCURACY_CACHE)
         accuracy_bar_chart_by_season(acc_data=acc, model_meta_data=model_meta_data(acc_data=acc),
                                      fig_loc=FIGURE_DIR)
-    print("Figures written to %s" % (path.abspath(FIGURE_DIR)))
+    print(("Figures written to %s" % (path.abspath(FIGURE_DIR))))
 
 if __name__ == '__main__':
     main(sys.argv)

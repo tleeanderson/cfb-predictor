@@ -44,7 +44,7 @@ def test_predict():
     assert(out[t] == False)
 
     try:
-        bad_ta = {k: ta[k] for k in ta.keys()}
+        bad_ta = {k: ta[k] for k in list(ta.keys())}
         bad_ta.update({'8': {ps: v1}})
         model.predict(team_avgs=bad_ta, eval_func=ef)
     except ValueError:
@@ -96,20 +96,39 @@ def test_accuracy():
     ck, ik, tk, ak, w, tc, tie = 'correct', 'incorr', 'total', 'accuracy', const.WINNER,\
                                  const.TEAM_CODE, 'tie'
     gid_1, gid_2, gid_3, gid_4, tid_1, tid_2 = 'gid1', 'gid2', 'gid3', 'gid4', 'tid1', 'tid2'
+    acc_args = {'correct_key': ck, 'incorrect_key': ik, 'total_key': tk, 'skip_keys': {},
+                'acc_key': ak}
 
-    tgs = {gid_1: {w: {tc: tid_1}}, 
+    tgs = {gid_1: {w: {tc: tid_1}},
            gid_2: {w: {tc: tid_2}}, 
            gid_3: {w: {tc: tid_1}}}
     preds = {gid_1: {w: tid_1, tie: False}, gid_2: {w: tid_2, tie: False}, 
              gid_3: {w: tid_2, tie: False}}
+    out = model.accuracy(tg_stats=tgs, predictions=preds, **acc_args)
 
-    out = model.accuracy(tg_stats=tgs, predictions=preds, correct_key=ck, incorrect_key=ik, 
-                         total_key=tk, skip_keys={}, acc_key=ak)
+    nc_tgs = {gid_1: {w: {tc: tid_1}}}
+    nc_pred = {gid_1: {w: tid_2, tie: False}}
+    nc_out = model.accuracy(tg_stats=nc_tgs, predictions=nc_pred, **acc_args)
+
+    oc_tgs = {gid_1: {w: {tc: tid_1}}}
+    oc_pred = {gid_1: {w: tid_1, tie: False}}
+    oc_out = model.accuracy(tg_stats=oc_tgs, predictions=oc_pred, **acc_args)
 
     assert(2 == out[ck])
     assert(1 == out[ik])
     assert(3 == out[tk])
     assert(2 / 3.0 == out[ak])
+
+    assert(0 == nc_out[ck])
+    assert(1 == nc_out[ik])
+    assert(1 == nc_out[tk])
+    assert(0 == round(nc_out[ak]))
+
+    assert(1 == oc_out[ck])
+    assert(0 == oc_out[ik])
+    assert(1 == oc_out[tk])
+    assert(1 == round(oc_out[ak]))
+
 
 def test_accuracy_by_date():
     ck, ik, tk, ak, w, tc, tie, d, sep, octo, nov = 'correct', 'incorr', 'total', 'accuracy',\
@@ -140,10 +159,10 @@ def test_accuracy_by_date():
     out = model.accuracy_by_date(tg_stats=tgs, predictions=preds, game_info=gi, correct_key=ck, incorrect_key=ik, 
                          total_key=tk, skip_keys={}, acc_key=ak)
 
-    assert(1 == len(set(map(lambda d: out[d][tk], out))))
-    assert(all(map(lambda d: d[-1] == out[d[0]][ck], [(octo, 0), (sep, 1), (nov, 2)])))
-    assert(all(map(lambda d: d[-1] == out[d[0]][ik], [(octo, 2), (sep, 1), (nov, 0)])))
-    assert(all(map(lambda d: d[-1] == out[d[0]][ak], [(octo, 0.0), (sep, 0.5), (nov, 1.0)])))
+    assert(1 == len(set([out[d][tk] for d in out])))
+    assert(all([d[-1] == out[d[0]][ck] for d in [(octo, 0), (sep, 1), (nov, 2)]]))
+    assert(all([d[-1] == out[d[0]][ik] for d in [(octo, 2), (sep, 1), (nov, 0)]]))
+    assert(all([d[-1] == out[d[0]][ak] for d in [(octo, 0.0), (sep, 0.5), (nov, 1.0)]]))
 
 def test_filter_by_total():
     sep, octo, nov, t = '09/01/2005', '10/01/2005', '11/01/2005', 'total'
@@ -155,5 +174,5 @@ def test_filter_by_total():
 
     assert({sep, octo, nov} == set(out_all.keys()))
     assert({sep, nov} == set(out_two))
-    assert({} == {} if out_empty.keys() == [] else None)
+    assert({} == {} if list(out_empty.keys()) == [] else None)
     

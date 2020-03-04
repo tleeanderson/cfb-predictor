@@ -1,9 +1,10 @@
 *.txt
 *.png
 *.pyc
-accuracy_analysis
+junk
 *.test.sh
 model_out
 *_pb2.py
 data_cache
 prediction
+test/.cache

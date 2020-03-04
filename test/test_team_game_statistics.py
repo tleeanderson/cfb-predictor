@@ -1,5 +1,6 @@
 import team_game_statistics as tgs
 import copy
+from functools import reduce
 
 def test_csv_to_map():
     gc, tc, sk, gid_1, gid_2, ts = 'Game Code', 'Team Code', 'score', '1', '2', 50
@@ -9,11 +10,11 @@ def test_csv_to_map():
     out = tgs.csv_to_map(csv_reader=in_data)
 
     assert(len(out) == 2)
-    assert(set(map(lambda e: e[gc], in_data)) == set(out.keys()))
-    assert(set(map(lambda e: e[tc], in_data)) == set(reduce(lambda l1,l2: l1 + l2,
-        map(lambda gid: out[gid].keys(), out))))
-    for gid, teams in out.iteritems():
-        for tid, stat in teams.iteritems():
+    assert(set([e[gc] for e in in_data]) == set(out.keys()))
+    assert(set([e[tc] for e in in_data]) == set(reduce(lambda l1,l2: l1 + l2,
+        [list(out[gid].keys()) for gid in out])))
+    for gid, teams in out.items():
+        for tid, stat in teams.items():
             assert({sk} == set(stat.keys()))
             assert({ts} == set(stat.values()))
 

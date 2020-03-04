@@ -34,7 +34,7 @@ def test_normality_filter():
     out = da.normality_filter(shapiro_wilk=sw, threshold=0.98)
 
     assert len(out) == 2
-    for entry in out.iteritems():
+    for entry in out.items():
         assert norm in entry[0]
 
 def test_z_scores():

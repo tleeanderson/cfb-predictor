@@ -38,9 +38,9 @@ def alter_types(game_map, type_mapper):
     """
 
     result = {}
-    for game_id, teams in game_map.iteritems():
+    for game_id, teams in game_map.items():
         result[game_id] = {}
-        for team_id, team_stats in teams.iteritems():
+        for team_id, team_stats in teams.items():
             result[game_id][team_id] = type_mapper(team_stats=team_stats)
     return result
 
@@ -56,7 +56,7 @@ def type_mapper(team_stats):
     """
 
     result = {}
-    for stat_name, stat_value in team_stats.iteritems():
+    for stat_name, stat_value in team_stats.items():
         value = util.convert_type(types=(int, float), value=stat_value)
         result[stat_name] = value
     return result
@@ -73,12 +73,12 @@ def add_labels(team_game_stats):
     """
 
     team_game_stats_copy = copy.deepcopy(team_game_stats)
-    for game_id, teams in team_game_stats_copy.iteritems():
+    for game_id, teams in team_game_stats_copy.items():
         points = []
-        for team_id, game_stats in teams.iteritems():
+        for team_id, game_stats in teams.items():
             points.append((game_stats['Points'], team_id))
         team_game_stats_copy[game_id]['Winner'] = {'Team Code': max(points)[1], 
-                                              'Total Points': sum(map(lambda t: t[0], points)), 
+                                              'Total Points': sum([t[0] for t in points]), 
                                               points[0][1]: points[0][0], 
                                               points[-1][1]: points[-1][0]}
     return team_game_stats_copy
@@ -97,8 +97,8 @@ def win_loss_pct(tid1, games):
     ps = 'Points'
     result = {}
     result[tid1] = 0.0
-    for gid, stat in games.iteritems():
-        win_tid = max(map(lambda t: (stat[t][ps], t), stat))[1]
+    for gid, stat in games.items():
+        win_tid = max([(stat[t][ps], t) for t in stat])[1]
         if win_tid == tid1:
             result[tid1] += 1
     result[tid1] = result[tid1] / len(games) if len(games) > 0 else 0.0
@@ -117,18 +117,18 @@ def averages(game_stats, team_ids):
     """
 
     avgs = {}
-    for gid, team_stats in game_stats.iteritems():
-        for tid, stats in team_stats.iteritems():
+    for gid, team_stats in game_stats.items():
+        for tid, stats in team_stats.items():
             if tid in team_ids:
                 if tid in avgs:
                     avgs[tid] = util.merge_maps(map1=avgs[tid], map2=stats, merge_op=op.add)
                 else:
                     avgs[tid] = stats
-    for tid, stats in avgs.iteritems():
+    for tid, stats in avgs.items():
         avgs[tid] = util.merge_maps(map1=stats, 
-                                    map2=util.create_map(keys=avgs[tid].keys(), 
-                                                         default=float(len(game_stats.keys()))), 
-                                    merge_op=op.div)
+                                    map2=util.create_map(keys=list(avgs[tid].keys()), 
+                                                         default=float(len(list(game_stats.keys())))), 
+                                    merge_op=op.truediv)
     return avgs
 
 def team_game_stats(directory):
@@ -147,3 +147,11 @@ def team_game_stats(directory):
                                     game_map=team_game_stats)
     
     return converted_tgs
+
+def tgs_data(dirs):
+    return {d: team_game_stats(directory=d) for d in dirs}
+
+def add_labels_season(team_game_stats):
+    return {k: add_labels(team_game_stats=team_game_stats[k]) for k in team_game_stats}
+
+

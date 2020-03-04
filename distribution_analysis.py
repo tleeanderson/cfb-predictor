@@ -23,9 +23,8 @@ def reorder(features):
 
     res = []
     no_match = []
-    for field in filter(lambda x: '-0' in x, set(features.keys())):
-        lis = filter(lambda e: e[0 : len(e) - 2] == field[0 : len(field) - 2], 
-                     filter(lambda x: '-1' in x, set(features.keys())))
+    for field in [x for x in set(features.keys()) if '-0' in x]:
+        lis = [e for e in [x for x in set(features.keys()) if '-1' in x] if e[0 : len(e) - 2] == field[0 : len(field) - 2]]
         if len(lis) == 1:
             res.append((field, features[field]))
             res.append((lis[0], features[lis[0]]))
@@ -69,7 +68,7 @@ def shapiro_wilk(distributions):
     """
 
     result = {}
-    for k, d in distributions.iteritems():
+    for k, d in distributions.items():
         result[k] = shapiro(d)
     
     return result
@@ -85,7 +84,7 @@ def similar_field(field, all_fields):
     Returns: the first matching field if one is found, otherwise None
     """
 
-    res = filter(lambda e: e[0 : len(e) - 2] == field[0 : len(field) - 2], all_fields)
+    res = [e for e in all_fields if e[0 : len(e) - 2] == field[0 : len(field) - 2]]
     return res[0] if res else None
 
 def normality_filter(shapiro_wilk, threshold):
@@ -103,8 +102,8 @@ def normality_filter(shapiro_wilk, threshold):
     """
 
     result = {}
-    for f, val in filter(lambda i: '-0' in i[0], set(shapiro_wilk.iteritems())):
-        sf = similar_field(field=f, all_fields=filter(lambda k: '-1' in k, set(shapiro_wilk.keys())))
+    for f, val in [i for i in set(shapiro_wilk.items()) if '-0' in i[0]]:
+        sf = similar_field(field=f, all_fields=[k for k in set(shapiro_wilk.keys()) if '-1' in k])
         if sf and (shapiro_wilk[sf][0] >= threshold or val[0] >= threshold):
             result[f] = val
             result[sf] = shapiro_wilk[sf]
@@ -138,7 +137,7 @@ def z_scores_args(data, mean, stddev):
     Returns: zscores of data
     """
 
-    return map(lambda d: (d - mean) / stddev, data)
+    return [(d - mean) / stddev for d in data]
 
 def z_scores(data):
     """Computes zscores for given data, based off of a mean and stddev
@@ -164,4 +163,4 @@ def reverse_zscores(data, mean, stddev):
     Returns: original values of data
     """
     
-    return map(lambda v: v * stddev + mean, data)
+    return [v * stddev + mean for v in data]

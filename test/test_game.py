@@ -3,14 +3,14 @@ import operator as op
 
 def test_csv_to_map():
     gc, sk = 'Game Code', 'score'
-    in_data = map(lambda i: {gc: str(i), sk: 50 + i}, range(10))
+    in_data = [{gc: str(i), sk: 50 + i} for i in range(10)]
     
     out = game.csv_to_map(csv_reader=in_data)
 
     assert(len(out) == len(in_data))
-    for gid, val in out.iteritems():
-        assert gc not in val.keys() 
-        assert sk in val.keys()
+    for gid, val in out.items():
+        assert gc not in list(val.keys()) 
+        assert sk in list(val.keys())
 
 def test_seasons_by_game_code():
     visit_team, home_team = 'Visit Team Code', 'Home Team Code'

@@ -73,10 +73,10 @@ def merge_maps(map1, map2, merge_op):
     """
     
     if set(map1.keys()) == set(map2.keys()):
-        return {k: merge_op(map1[k], map2[k]) for k in map1.keys()}
+        return {k: merge_op(map1[k], map2[k]) for k in list(map1.keys())}
     else:
         raise ValueError("set(map1.keys()) == set(map2.keys()) must be true, diff: (%s)" % 
-                         (str(set(map1.keys()).difference(map2.keys()))))
+                         (str(set(map1.keys()).difference(list(map2.keys())))))
 
 def create_map(keys, default):
     """Creates a map with default values given keys and a value
@@ -100,7 +100,7 @@ def write_to_cache(cache_dir, data):
     Returns: None
     """
 
-    for sea, d in data.iteritems():
+    for sea, d in data.items():
         with open(path.join(path.abspath(cache_dir), path.basename(sea)), 'wb') as fh:
             pickle.dump(d, fh)
 
@@ -179,5 +179,24 @@ def print_cache_reads(coll, data_origin):
     if len(coll) > 0:
         print_collection(coll=coll)
     else:
-        print("All data was read from %s" % (path.abspath(data_origin)))
+        print(("All data was read from %s" % (path.abspath(data_origin))))
     print("\n")
+
+def data_to_cache(cache_dir, data):
+    if not path.exists(cache_dir):
+        os.makedirs(cache_dir)
+    write_to_cache(cache_dir=cache_dir, data=data)
+
+def data_from_cache(cache_dir, input_dir):
+    if path.exists(cache_dir):
+        return read_from_cache(cache_dir=cache_dir, context_dir=input_dir)
+    return None
+
+def compute_or_cache(cache_dir, input_dir, comp_func, comp_func_args):
+    result = data_from_cache(cache_dir=cache_dir, input_dir=input_dir)
+    if result is None:
+        result = comp_func(**comp_func_args)
+        data_to_cache(cache_dir=cache_dir, data=result)
+    return result
+
+
